@@ -166,3 +166,71 @@ func fallbackUnlock(path string) error {
 
 	return os.Chmod(path, 0644)
 }
+
+// IsLocked checks if a path has immutable flags set
+func IsLocked(path string) (bool, error) {
+	// Resolve symlinks
+	realPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		realPath = path
+	}
+
+	// Check if path exists
+	if _, err := os.Stat(realPath); err != nil {
+		return false, fmt.Errorf("path does not exist: %s", realPath)
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		return isLockedLinux(realPath)
+	case "darwin":
+		return isLockedDarwin(realPath)
+	default:
+		return false, fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+}
+
+// isLockedLinux checks if immutable flag is set on Linux
+func isLockedLinux(path string) (bool, error) {
+	// Use lsattr to check if immutable flag is set
+	cmd := exec.Command("lsattr", path)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// If lsattr is not available or fails, check permissions
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			return false, statErr
+		}
+		// Check if read-only (fallback check)
+		return info.Mode().Perm() == 0444, nil
+	}
+
+	// lsattr output format: "----i--------e----- /path/to/file"
+	// Check if 'i' flag is present (5th character)
+	outputStr := string(output)
+	if len(outputStr) >= 5 {
+		return strings.Contains(outputStr[:20], "i"), nil
+	}
+
+	return false, nil
+}
+
+// isLockedDarwin checks if immutable flag is set on macOS
+func isLockedDarwin(path string) (bool, error) {
+	// Use stat command to check file flags
+	cmd := exec.Command("stat", "-f", "%Sf", path)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// If stat fails, fallback to permission check
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			return false, statErr
+		}
+		// Fallback to permission check
+		return info.Mode().Perm() == 0444, nil
+	}
+
+	// Check if output contains "schg" flag
+	outputStr := string(output)
+	return strings.Contains(outputStr, "schg"), nil
+}

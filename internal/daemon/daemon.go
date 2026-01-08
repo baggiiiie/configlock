@@ -43,6 +43,11 @@ func New() (*Daemon, error) {
 }
 
 // Start starts the daemon
+//
+// The daemon uses two mechanisms to ensure immutable flags stay applied:
+// 1. File system watching (fsnotify) - provides instant reaction to changes
+// 2. Periodic sweep (every 30 seconds) - catches changes that fsnotify might miss,
+//    such as manual flag removal via 'sudo chattr -i' or 'sudo chflags noschg'
 func (d *Daemon) Start() error {
 	d.logger.Info("Starting configlock daemon")
 
@@ -50,13 +55,14 @@ func (d *Daemon) Start() error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
-	// Set up file watchers
+	// Set up file watchers for instant reaction to file system changes
 	if err := d.setupWatchers(); err != nil {
 		d.logger.Errorf("Failed to setup watchers: %v", err)
 		// Continue anyway, periodic enforcement will still work
 	}
 
-	// Start periodic enforcement
+	// Start periodic enforcement (runs every 30 seconds)
+	// This catches attribute changes that fsnotify might not detect
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
@@ -89,9 +95,11 @@ func (d *Daemon) Start() error {
 
 		case event := <-d.watcher.Events:
 			d.logger.Infof("File event detected: %s %s", event.Op, event.Name)
-			// Re-apply locks immediately on any file change
+			// Re-apply locks immediately on any file change detected by fsnotify
+			// This provides instant reaction to modifications, deletions, renames, etc.
 			if d.cfg.IsWithinWorkHours() {
-				d.lockPath(event.Name)
+				// Find which locked path this event relates to and re-lock it
+				d.handleFileEvent(event.Name)
 			}
 
 		case err := <-d.watcher.Errors:
@@ -179,14 +187,40 @@ func (d *Daemon) enforce() {
 
 	d.logger.Info("Enforcing locks (within work hours)")
 
-	// Apply locks to all paths
+	// Apply locks to all paths and verify they're locked
 	for _, path := range d.cfg.LockedPaths {
 		if d.cfg.IsTemporarilyExcluded(path) {
 			d.logger.Infof("Skipping temporarily excluded path: %s", path)
 			continue
 		}
 
+		// Verify if lock is still in place
+		if locked, err := locker.IsLocked(path); err == nil && !locked {
+			d.logger.Warnf("Lock removed from %s, re-applying", path)
+		}
+
 		d.lockPath(path)
+	}
+}
+
+// handleFileEvent processes a file system event and re-locks the appropriate path
+func (d *Daemon) handleFileEvent(eventPath string) {
+	// Find all locked paths that match or contain this event path
+	for _, lockedPath := range d.cfg.LockedPaths {
+		// Skip if temporarily excluded
+		if d.cfg.IsTemporarilyExcluded(lockedPath) {
+			continue
+		}
+
+		// Check if event path is the locked path itself or within it
+		if eventPath == lockedPath || strings.HasPrefix(eventPath, lockedPath+string(filepath.Separator)) {
+			d.logger.Infof("Event detected on locked path %s, re-applying lock", lockedPath)
+			d.lockPath(lockedPath)
+		} else if filepath.Dir(eventPath) == filepath.Dir(lockedPath) {
+			// Event in parent directory (e.g., file was deleted/recreated)
+			d.logger.Infof("Event detected in parent of locked path %s, re-applying lock", lockedPath)
+			d.lockPath(lockedPath)
+		}
 	}
 }
 
