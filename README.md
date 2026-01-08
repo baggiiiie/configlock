@@ -14,12 +14,46 @@ A CLI tool and daemon that prevents editing of specified config files or directo
 
 ## Installation
 
-### Prerequisites
+### Quick Install (Recommended)
 
-- Go 1.21 or later
-- Linux or macOS
+Install ConfigLock with a single command:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/baggiiiie/try-monorepo/main/configlock/install.sh | bash
+```
+
+This will automatically:
+- Detect your OS and architecture
+- Download the latest release
+- Install to `/usr/local/bin/`
+
+After installation, run:
+```bash
+configlock init
+```
+
+### Alternative: Download Pre-built Binary
+
+Download the latest release for your platform from the [releases page](https://github.com/baggiiiie/try-monorepo/releases):
+
+```bash
+# Download for your platform
+# Linux AMD64
+curl -LO https://github.com/baggiiiie/try-monorepo/releases/latest/download/configlock-linux-amd64
+
+# macOS ARM64 (Apple Silicon)
+curl -LO https://github.com/baggiiiie/try-monorepo/releases/latest/download/configlock-darwin-arm64
+
+# Make executable and move to PATH
+chmod +x configlock-*
+sudo mv configlock-* /usr/local/bin/configlock
+```
 
 ### Build from Source
+
+Prerequisites:
+- Go 1.24 or later
+- Linux or macOS
 
 ```bash
 # Clone or navigate to the configlock directory
@@ -28,8 +62,8 @@ cd configlock
 # Build the binary
 go build -o configlock
 
-# Move to a location in your PATH (optional)
-mv configlock /usr/local/bin/
+# Install to /usr/local/bin
+sudo mv configlock /usr/local/bin/
 
 # Initialize and install the daemon
 configlock init
@@ -290,14 +324,47 @@ configlock/
 
 ### Building
 
+Build for current platform:
 ```bash
+# Simple build
+go build -o configlock
+
 # Build with version info
 go build -ldflags "-X github.com/baggiiiie/configlock/cmd.version=1.0.0" -o configlock
 
-# Build for specific OS
-GOOS=linux GOARCH=amd64 go build -o configlock-linux
-GOOS=darwin GOARCH=amd64 go build -o configlock-macos
+# Optimized build (smaller binary)
+CGO_ENABLED=0 go build -ldflags "-s -w -X github.com/baggiiiie/configlock/cmd.version=1.0.0" -trimpath -o configlock
 ```
+
+Cross-platform builds:
+```bash
+# Linux AMD64
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -trimpath -o configlock-linux-amd64
+
+# macOS ARM64 (Apple Silicon)
+CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "-s -w" -trimpath -o configlock-darwin-arm64
+```
+
+### Releasing
+
+Releases are automated via GitHub Actions. To create a new release:
+
+1. **Create a GitHub release**:
+   ```bash
+   # Using GitHub CLI (recommended)
+   gh release create configlock-v1.0.0 --generate-notes --title "ConfigLock v1.0.0"
+
+   # Or create manually via GitHub web UI
+   ```
+
+2. **GitHub Actions will automatically**:
+   - Build binaries for all platforms (linux/darwin × amd64/arm64)
+   - Upload all binaries to the release
+
+3. **Users can then install** with:
+   ```bash
+   curl -sSL https://raw.githubusercontent.com/baggiiiie/try-monorepo/main/configlock/install.sh | bash
+   ```
 
 ### Dependencies
 
