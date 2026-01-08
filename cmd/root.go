@@ -3,20 +3,42 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 )
 
-var version = "1.0.0"
+var version = ""
 
 var rootCmd = &cobra.Command{
 	Use:   "configlock",
 	Short: "ConfigLock - A productivity enforcer for config files",
 	Long: `ConfigLock is a CLI tool and daemon that prevents editing of specified
 config files or directories during work hours using system-level immutable flags.`,
-	Version:       version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+}
+
+// SetVersion sets the version from main package
+func SetVersion(v string) {
+	version = v
+	rootCmd.Version = GetVersion()
+}
+
+// GetVersion returns the version string with fallback logic
+func GetVersion() string {
+	if version != "" {
+		return version
+	}
+
+	// Try to get version from build info
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if info.Main.Version != "" && info.Main.Version != "(devel)" {
+			return info.Main.Version
+		}
+	}
+
+	return "unknown"
 }
 
 // Execute runs the root command
