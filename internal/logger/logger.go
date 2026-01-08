@@ -44,15 +44,21 @@ func (l *Logger) Init() error {
 	defer l.mu.Unlock()
 
 	// Determine log path based on OS
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+
 	var logPath string
 	switch runtime.GOOS {
 	case "linux":
-		logPath = "/var/log/configlock.log"
-	case "darwin":
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("failed to get home directory: %w", err)
+		// Use XDG_DATA_HOME or default to ~/.local/share
+		logDir := filepath.Join(home, ".local", "share", "configlock")
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			return fmt.Errorf("failed to create log directory: %w", err)
 		}
+		logPath = filepath.Join(logDir, "configlock.log")
+	case "darwin":
 		logDir := filepath.Join(home, "Library", "Logs")
 		if err := os.MkdirAll(logDir, 0755); err != nil {
 			return fmt.Errorf("failed to create log directory: %w", err)

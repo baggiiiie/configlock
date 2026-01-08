@@ -40,6 +40,10 @@ func New() (*Service, error) {
 		Description: "Enforces file locking during work hours to prevent impulsive config editing",
 		Executable:  execPath,
 		Arguments:   []string{"daemon"},
+		Option: service.KeyValue{
+			// Install as user service (not system-wide)
+			"UserService": true,
+		},
 	}
 
 	prg := &program{}

@@ -9,9 +9,9 @@ Use `github.com/spf13/cobra` for CLI parsing (recommended) or the standard `flag
   1. Create config directory `~/.config/configlock` if it doesn't exist.
   2. Prompt user for work start time (default "08:00"), end time (default "17:00"), and temp-unlock duration in minutes (default 5).
   3. Create `config.json` with default structure.
-  4. Install the daemon as a system service using `github.com/kardianos/service`:
-     - Linux: systemd unit at `/etc/systemd/system/configlock.service`
-     - macOS: launchd plist at `/Library/LaunchDaemons/com.configlock.daemon.plist`
+  4. Install the daemon as a user service using `github.com/kardianos/service`:
+     - Linux: systemd user unit at `~/.config/systemd/user/configlock.service`
+     - macOS: launchd agent at `~/Library/LaunchAgents/com.configlock.daemon.plist`
   5. Enable and start the service.
 - **Output**: Clear success/error messages.
 

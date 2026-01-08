@@ -200,7 +200,7 @@ launchctl stop gui/$(id -u)/com.configlock.daemon
 ## Logging
 
 Logs are written to:
-- **Linux**: `/var/log/configlock.log`
+- **Linux**: `~/.local/share/configlock/configlock.log`
 - **macOS**: `~/Library/Logs/configlock.log`
 
 Log entries include:
