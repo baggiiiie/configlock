@@ -40,6 +40,12 @@ func Lock(path string) error {
 				lastErr = err
 			}
 		}
+
+		// Also lock the directory itself
+		if err := lockFile(realPath); err != nil {
+			lastErr = err
+		}
+
 		return lastErr
 	}
 
@@ -47,7 +53,7 @@ func Lock(path string) error {
 	return lockFile(realPath)
 }
 
-// lockFile locks a single file (not a directory)
+// lockFile locks a single file or directory
 func lockFile(path string) error {
 	switch runtime.GOOS {
 	case "linux":
@@ -76,6 +82,11 @@ func Unlock(path string) error {
 
 	// If it's a directory, collect files respecting .gitignore and unlock each file
 	if info.IsDir() {
+		// Unlock the directory itself first
+		if err := unlockFile(realPath); err != nil {
+			return fmt.Errorf("failed to unlock directory: %w", err)
+		}
+
 		files, err := fileutil.CollectFilesRecursively(realPath)
 		if err != nil {
 			return fmt.Errorf("failed to collect files: %w", err)
@@ -94,7 +105,7 @@ func Unlock(path string) error {
 	return unlockFile(realPath)
 }
 
-// unlockFile unlocks a single file (not a directory)
+// unlockFile unlocks a single file or directory
 func unlockFile(path string) error {
 	switch runtime.GOOS {
 	case "linux":
@@ -115,7 +126,7 @@ func lockLinux(path string) error {
 		if err := fallbackLock(path); err != nil {
 			return fmt.Errorf("chattr failed and fallback failed: %v, output: %s", err, string(output))
 		}
-		logger.GetLogger().Infof("LOCK (fallback): chattr +i %s", path)
+		logger.GetLogger().Infof("LOCK (fallback): chmod 444 %s (chattr +i failed: %v)", path, err)
 		return nil
 	}
 	logger.GetLogger().Infof("LOCK: chattr +i %s", path)
@@ -131,7 +142,7 @@ func unlockLinux(path string) error {
 		if err := fallbackUnlock(path); err != nil {
 			return fmt.Errorf("chattr failed and fallback failed: %v, output: %s", err, string(output))
 		}
-		logger.GetLogger().Infof("UNLOCK (fallback): chattr -i %s", path)
+		logger.GetLogger().Infof("UNLOCK (fallback): chmod 644 %s (chattr -i failed: %v)", path, err)
 		return nil
 	}
 	logger.GetLogger().Infof("UNLOCK: chattr -i %s", path)
@@ -140,33 +151,53 @@ func unlockLinux(path string) error {
 
 // lockDarwin applies immutable flag on macOS (for a single file)
 func lockDarwin(path string) error {
-	cmd := exec.Command("chflags", "schg", path)
+	// Try uchg first (user immutable, doesn't require root)
+	cmd := exec.Command("chflags", "uchg", path)
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		// Try fallback to chmod
-		if err := fallbackLock(path); err != nil {
-			return fmt.Errorf("chflags failed and fallback failed: %v, output: %s", err, string(output))
-		}
-		logger.GetLogger().Infof("LOCK (fallback): chflags schg %s", path)
+	if err == nil {
+		logger.GetLogger().Infof("LOCK: chflags uchg %s", path)
 		return nil
 	}
-	logger.GetLogger().Infof("LOCK: chflags schg %s", path)
+
+	// If uchg fails, try schg (system immutable, requires root)
+	cmd = exec.Command("chflags", "schg", path)
+	output, err = cmd.CombinedOutput()
+	if err == nil {
+		logger.GetLogger().Infof("LOCK: chflags schg %s", path)
+		return nil
+	}
+
+	// If both fail, fall back to chmod
+	if err := fallbackLock(path); err != nil {
+		return fmt.Errorf("chflags uchg and schg failed, chmod fallback also failed: %v, output: %s", err, string(output))
+	}
+	logger.GetLogger().Infof("LOCK (fallback): chmod 444 %s (chflags uchg and schg failed: %v)", path, err)
 	return nil
 }
 
 // unlockDarwin removes immutable flag on macOS (for a single file)
 func unlockDarwin(path string) error {
-	cmd := exec.Command("chflags", "noschg", path)
+	// Try removing uchg first (user immutable)
+	cmd := exec.Command("chflags", "nouchg", path)
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		// Try fallback to chmod
-		if err := fallbackUnlock(path); err != nil {
-			return fmt.Errorf("chflags failed and fallback failed: %v, output: %s", err, string(output))
-		}
-		logger.GetLogger().Infof("UNLOCK (fallback): chflags noschg %s", path)
+	if err == nil {
+		logger.GetLogger().Infof("UNLOCK: chflags nouchg %s", path)
 		return nil
 	}
-	logger.GetLogger().Infof("UNLOCK: chflags noschg %s", path)
+
+	// If that fails, try removing schg (system immutable)
+	cmd = exec.Command("chflags", "noschg", path)
+	output, err = cmd.CombinedOutput()
+	if err == nil {
+		logger.GetLogger().Infof("UNLOCK: chflags noschg %s", path)
+		return nil
+	}
+
+	// If both fail, fall back to chmod
+	if err := fallbackUnlock(path); err != nil {
+		return fmt.Errorf("chflags nouchg and noschg failed, chmod fallback also failed: %v, output: %s", err, string(output))
+	}
+	logger.GetLogger().Infof("UNLOCK (fallback): chmod 644 %s (chflags nouchg and noschg failed: %v)", path, err)
 	return nil
 }
 
@@ -243,7 +274,7 @@ func isLockedDarwin(path string) (bool, error) {
 		return info.Mode().Perm() == 0444, nil
 	}
 
-	// Check if output contains "schg" flag
+	// Check if output contains "uchg" (user immutable) or "schg" (system immutable) flag
 	outputStr := string(output)
-	return strings.Contains(outputStr, "schg"), nil
+	return strings.Contains(outputStr, "uchg") || strings.Contains(outputStr, "schg"), nil
 }
