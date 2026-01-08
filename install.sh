@@ -6,7 +6,7 @@ set -e
 
 # Configuration
 REPO="baggiiiie/try-monorepo"
-INSTALL_DIR="/usr/local/bin"
+INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="configlock"
 
 # Colors for output
@@ -89,17 +89,16 @@ install_binary() {
     # Make it executable
     chmod +x "${tmp_dir}/${BINARY_NAME}"
 
-    # Check if we need sudo
-    if [ -w "$INSTALL_DIR" ]; then
-        info "Installing to ${INSTALL_DIR}/${BINARY_NAME}..."
-        mv "${tmp_dir}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
-    else
-        warn "Need elevated permissions to install to ${INSTALL_DIR}"
-        info "Installing to ${INSTALL_DIR}/${BINARY_NAME}..."
-        sudo mv "${tmp_dir}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
-    fi
+    # Create install directory if it doesn't exist
+    mkdir -p "$INSTALL_DIR"
 
+    info "Installing to ${INSTALL_DIR}/${BINARY_NAME}..."
+    mv "${tmp_dir}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+    
     info "Installation complete!"
+    echo ""
+    info "If '$INSTALL_DIR' is not in your PATH, you may need to add it to run '${BINARY_NAME}' directly."
+    info "Example: export PATH=\"$PATH:$INSTALL_DIR\""
     echo ""
     info "Run '${BINARY_NAME} --help' to get started"
     info "Run '${BINARY_NAME} init' to set up ConfigLock"
