@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/baggiiiie/configlock/internal/fileutil"
 )
 
 // Lock applies immutable flags to a path recursively
@@ -19,15 +21,38 @@ func Lock(path string) error {
 	}
 
 	// Check if path exists
-	if _, err := os.Stat(realPath); err != nil {
+	info, err := os.Stat(realPath)
+	if err != nil {
 		return fmt.Errorf("path does not exist: %s", realPath)
 	}
 
+	// If it's a directory, collect files respecting .gitignore and lock each file
+	if info.IsDir() {
+		files, err := fileutil.CollectFilesRecursively(realPath)
+		if err != nil {
+			return fmt.Errorf("failed to collect files: %w", err)
+		}
+
+		var lastErr error
+		for _, file := range files {
+			if err := lockFile(file); err != nil {
+				lastErr = err
+			}
+		}
+		return lastErr
+	}
+
+	// For single files, lock directly
+	return lockFile(realPath)
+}
+
+// lockFile locks a single file (not a directory)
+func lockFile(path string) error {
 	switch runtime.GOOS {
 	case "linux":
-		return lockLinux(realPath)
+		return lockLinux(path)
 	case "darwin":
-		return lockDarwin(realPath)
+		return lockDarwin(path)
 	default:
 		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
@@ -43,23 +68,46 @@ func Unlock(path string) error {
 	}
 
 	// Check if path exists
-	if _, err := os.Stat(realPath); err != nil {
+	info, err := os.Stat(realPath)
+	if err != nil {
 		return fmt.Errorf("path does not exist: %s", realPath)
 	}
 
+	// If it's a directory, collect files respecting .gitignore and unlock each file
+	if info.IsDir() {
+		files, err := fileutil.CollectFilesRecursively(realPath)
+		if err != nil {
+			return fmt.Errorf("failed to collect files: %w", err)
+		}
+
+		var lastErr error
+		for _, file := range files {
+			if err := unlockFile(file); err != nil {
+				lastErr = err
+			}
+		}
+		return lastErr
+	}
+
+	// For single files, unlock directly
+	return unlockFile(realPath)
+}
+
+// unlockFile unlocks a single file (not a directory)
+func unlockFile(path string) error {
 	switch runtime.GOOS {
 	case "linux":
-		return unlockLinux(realPath)
+		return unlockLinux(path)
 	case "darwin":
-		return unlockDarwin(realPath)
+		return unlockDarwin(path)
 	default:
 		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
 }
 
-// lockLinux applies immutable flag on Linux
+// lockLinux applies immutable flag on Linux (for a single file)
 func lockLinux(path string) error {
-	cmd := exec.Command("chattr", "+i", "-R", path)
+	cmd := exec.Command("chattr", "+i", path)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Try fallback to chmod
@@ -71,9 +119,9 @@ func lockLinux(path string) error {
 	return nil
 }
 
-// unlockLinux removes immutable flag on Linux
+// unlockLinux removes immutable flag on Linux (for a single file)
 func unlockLinux(path string) error {
-	cmd := exec.Command("chattr", "-i", "-R", path)
+	cmd := exec.Command("chattr", "-i", path)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Try fallback to chmod
@@ -85,9 +133,9 @@ func unlockLinux(path string) error {
 	return nil
 }
 
-// lockDarwin applies immutable flag on macOS
+// lockDarwin applies immutable flag on macOS (for a single file)
 func lockDarwin(path string) error {
-	cmd := exec.Command("chflags", "-R", "schg", path)
+	cmd := exec.Command("chflags", "schg", path)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Try fallback to chmod
@@ -99,9 +147,9 @@ func lockDarwin(path string) error {
 	return nil
 }
 
-// unlockDarwin removes immutable flag on macOS
+// unlockDarwin removes immutable flag on macOS (for a single file)
 func unlockDarwin(path string) error {
-	cmd := exec.Command("chflags", "-R", "noschg", path)
+	cmd := exec.Command("chflags", "noschg", path)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Try fallback to chmod
@@ -113,57 +161,13 @@ func unlockDarwin(path string) error {
 	return nil
 }
 
-// fallbackLock sets read-only permissions as fallback
+// fallbackLock sets read-only permissions as fallback (for a single file)
 func fallbackLock(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-
-	if info.IsDir() {
-		// Recursively set read-only for all files in directory
-		return filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			// Skip .git and .jj directories
-			if info.IsDir() && (strings.Contains(p, "/.git/") || strings.Contains(p, "/.jj/")) {
-				return filepath.SkipDir
-			}
-			if !info.IsDir() {
-				return os.Chmod(p, 0444)
-			}
-			return nil
-		})
-	}
-
 	return os.Chmod(path, 0444)
 }
 
-// fallbackUnlock sets writable permissions as fallback
+// fallbackUnlock sets writable permissions as fallback (for a single file)
 func fallbackUnlock(path string) error {
-	info, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-
-	if info.IsDir() {
-		// Recursively set writable for all files in directory
-		return filepath.Walk(path, func(p string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			// Skip .git and .jj directories
-			if info.IsDir() && (strings.Contains(p, "/.git/") || strings.Contains(p, "/.jj/")) {
-				return filepath.SkipDir
-			}
-			if !info.IsDir() {
-				return os.Chmod(p, 0644)
-			}
-			return nil
-		})
-	}
-
 	return os.Chmod(path, 0644)
 }
 

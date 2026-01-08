@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/baggiiiie/configlock/internal/config"
-	"github.com/baggiiiie/configlock/internal/daemon"
+	"github.com/baggiiiie/configlock/internal/fileutil"
 	"github.com/baggiiiie/configlock/internal/locker"
 	"github.com/spf13/cobra"
 )
@@ -36,6 +36,21 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to resolve path: %w", err)
 	}
 
+	// Check if path is a symlink and resolve it to the real path
+	linfo, err := os.Lstat(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to check path: %w", err)
+	}
+
+	if linfo.Mode()&os.ModeSymlink != 0 {
+		realPath, err := filepath.EvalSymlinks(absPath)
+		if err != nil {
+			return fmt.Errorf("failed to resolve symlink: %w", err)
+		}
+		fmt.Printf("Resolved symlink %s -> %s\n", absPath, realPath)
+		absPath = realPath
+	}
+
 	// Check if path exists
 	info, err := os.Stat(absPath)
 	if err != nil {
@@ -48,53 +63,51 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	var pathsToAdd []string
-
-	if info.IsDir() {
-		// Collect all files in directory recursively
-		fmt.Printf("Collecting files in directory %s...\n", absPath)
-		files, err := daemon.CollectFilesRecursively(absPath)
-		if err != nil {
-			return fmt.Errorf("failed to collect files: %w", err)
-		}
-		pathsToAdd = files
-		fmt.Printf("Found %d files\n", len(files))
-	} else {
-		pathsToAdd = []string{absPath}
-	}
-
 	// Create backups if requested
 	if !noBackup {
 		fmt.Println("Creating backups...")
-		for _, p := range pathsToAdd {
-			backupPath := p + ".bak"
-			if err := copyFile(p, backupPath); err != nil {
-				fmt.Printf("Warning: failed to backup %s: %v\n", p, err)
+		if info.IsDir() {
+			// Collect all files for backup purposes
+			files, err := fileutil.CollectFilesRecursively(absPath)
+			if err != nil {
+				return fmt.Errorf("failed to collect files for backup: %w", err)
+			}
+			for _, p := range files {
+				backupPath := p + ".bak"
+				if err := copyFile(p, backupPath); err != nil {
+					fmt.Printf("Warning: failed to backup %s: %v\n", p, err)
+				}
+			}
+		} else {
+			backupPath := absPath + ".bak"
+			if err := copyFile(absPath, backupPath); err != nil {
+				fmt.Printf("Warning: failed to backup %s: %v\n", absPath, err)
 			}
 		}
 	}
 
-	// Add paths to config
-	for _, p := range pathsToAdd {
-		cfg.AddPath(p)
-	}
+	// Add path to config (just the directory or file path, not individual files)
+	cfg.AddPath(absPath)
 
 	// Save config
 	if err := cfg.Save(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("✓ Added %d path(s) to lock list\n", len(pathsToAdd))
+	if info.IsDir() {
+		fmt.Printf("✓ Added directory to lock list: %s\n", absPath)
+	} else {
+		fmt.Printf("✓ Added file to lock list: %s\n", absPath)
+	}
 
 	// Apply locks immediately if within work hours
 	if cfg.IsWithinWorkHours() {
 		fmt.Println("Applying locks (within work hours)...")
-		for _, p := range pathsToAdd {
-			if err := locker.Lock(p); err != nil {
-				fmt.Printf("Warning: failed to lock %s: %v\n", p, err)
-			}
+		if err := locker.Lock(absPath); err != nil {
+			fmt.Printf("Warning: failed to lock %s: %v\n", absPath, err)
+		} else {
+			fmt.Println("✓ Locks applied")
 		}
-		fmt.Println("✓ Locks applied")
 	} else {
 		fmt.Println("Note: Outside work hours. Locks will be applied during work hours.")
 	}

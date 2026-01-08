@@ -7,7 +7,6 @@ import (
 
 	"github.com/baggiiiie/configlock/internal/challenge"
 	"github.com/baggiiiie/configlock/internal/config"
-	"github.com/baggiiiie/configlock/internal/daemon"
 	"github.com/baggiiiie/configlock/internal/locker"
 	"github.com/spf13/cobra"
 )
@@ -58,45 +57,29 @@ func runRm(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("challenge failed: %w", err)
 	}
 
-	// Determine paths to remove
-	var pathsToRemove []string
-
-	// Check if it's a directory (for recursive removal)
-	info, err := os.Stat(absPath)
-	if err == nil && info.IsDir() {
-		// Collect all files that should be removed
-		files, err := daemon.CollectFilesRecursively(absPath)
-		if err != nil {
-			fmt.Printf("Warning: failed to collect files: %v\n", err)
-			pathsToRemove = []string{absPath}
-		} else {
-			pathsToRemove = files
-		}
-	} else {
-		pathsToRemove = []string{absPath}
-	}
-
-	// Remove paths from config
-	for _, p := range pathsToRemove {
-		cfg.RemovePath(p)
-	}
+	// Remove path from config
+	cfg.RemovePath(absPath)
 
 	// Save config
 	if err := cfg.Save(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Printf("✓ Removed %d path(s) from lock list\n", len(pathsToRemove))
-
-	// Unlock the paths immediately
-	fmt.Println("Unlocking paths...")
-	for _, p := range pathsToRemove {
-		if err := locker.Unlock(p); err != nil {
-			fmt.Printf("Warning: failed to unlock %s: %v\n", p, err)
-		}
+	// Check if it's a file or directory for display purposes
+	info, err := os.Stat(absPath)
+	if err == nil && info.IsDir() {
+		fmt.Printf("✓ Removed directory from lock list: %s\n", absPath)
+	} else {
+		fmt.Printf("✓ Removed file from lock list: %s\n", absPath)
 	}
 
-	fmt.Println("✓ Paths unlocked")
+	// Unlock the path immediately (locker will handle directories recursively)
+	fmt.Println("Unlocking path...")
+	if err := locker.Unlock(absPath); err != nil {
+		fmt.Printf("Warning: failed to unlock %s: %v\n", absPath, err)
+	} else {
+		fmt.Println("✓ Path unlocked")
+	}
 
 	return nil
 }
