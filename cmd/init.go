@@ -16,8 +16,7 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize configlock and install the daemon",
 	Long: `Initialize configlock by creating the configuration file,
-prompting for work hours, and installing the daemon as a system service.
-This command must be run with sudo.`,
+prompting for work hours, and installing the daemon as a system service.`,
 	RunE: runInit,
 }
 
@@ -26,11 +25,6 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	// Check if running as root
-	if os.Getuid() != 0 {
-		return fmt.Errorf("this command must be run with sudo")
-	}
-
 	fmt.Println("Initializing ConfigLock...")
 
 	// Create config directory

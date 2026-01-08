@@ -17,7 +17,6 @@ A CLI tool and daemon that prevents editing of specified config files or directo
 ### Prerequisites
 
 - Go 1.21 or later
-- Root/sudo access (required for immutable flags and service management)
 - Linux or macOS
 
 ### Build from Source
@@ -30,10 +29,10 @@ cd configlock
 go build -o configlock
 
 # Move to a location in your PATH (optional)
-sudo mv configlock /usr/local/bin/
+mv configlock /usr/local/bin/
 
 # Initialize and install the daemon
-sudo configlock init
+configlock init
 ```
 
 ## Usage
@@ -43,7 +42,7 @@ sudo configlock init
 Run the initialization command to set up ConfigLock:
 
 ```bash
-sudo configlock init
+configlock init
 ```
 
 This will:
@@ -177,25 +176,25 @@ AND I AM WILLING TO PROCEED.
 
 ## Service Management
 
-The daemon is installed as a system service:
+The daemon is installed as a user service:
 
-- **Linux**: `/etc/systemd/system/configlock.service`
-- **macOS**: `/Library/LaunchDaemons/com.configlock.daemon.plist`
+- **Linux**: `~/.config/systemd/user/configlock.service`
+- **macOS**: `~/Library/LaunchAgents/com.configlock.daemon.plist`
 
 ### Manual Service Control (if needed)
 
 **Linux (systemd)**:
 ```bash
-sudo systemctl status configlock
-sudo systemctl restart configlock
-sudo systemctl stop configlock
+systemctl --user status configlock
+systemctl --user restart configlock
+systemctl --user stop configlock
 ```
 
 **macOS (launchd)**:
 ```bash
-sudo launchctl list | grep configlock
-sudo launchctl kickstart -k system/com.configlock.daemon
-sudo launchctl stop com.configlock.daemon
+launchctl list | grep configlock
+launchctl kickstart -k gui/$(id -u)/com.configlock.daemon
+launchctl stop gui/$(id -u)/com.configlock.daemon
 ```
 
 ## Logging
@@ -216,7 +215,7 @@ Logs automatically rotate when they exceed 10MB.
 
 ### Locks not applying
 
-1. Check daemon status: `sudo systemctl status configlock` (Linux) or `sudo launchctl list | grep configlock` (macOS)
+1. Check daemon status: `systemctl --user status configlock` (Linux) or `launchctl list | grep configlock` (macOS)
 2. Check logs for errors
 3. Verify you're within work hours: `configlock status`
 4. Ensure files exist at the specified paths
@@ -227,22 +226,20 @@ If you need to force unlock files:
 
 ```bash
 # Linux
-sudo chattr -i -R /path/to/file
+chattr -i -R /path/to/file
 
 # macOS
-sudo chflags -R noschg /path/to/file
+chflags -R noschg /path/to/file
 ```
 
 Then remove from config or use `temp-unlock`.
 
 ### Permission errors
 
-ConfigLock requires root access to:
-- Set immutable flags
-- Install/run system services
-- Write to system log directories
-
-Always use `sudo` for `init` command and when running the daemon.
+Note: Some operations may require elevated permissions:
+- Setting immutable flags (chattr/chflags) on system files
+- Installing system services
+- If you encounter permission errors, you can either run with `sudo` or ensure files are owned by your user
 
 ## Uninstalling
 
@@ -250,21 +247,19 @@ To remove ConfigLock:
 
 ```bash
 # Stop and uninstall the daemon
-sudo configlock init  # Will prompt to overwrite and allow uninstall
-# Or manually:
 # Linux
-sudo systemctl stop configlock
-sudo systemctl disable configlock
-sudo rm /etc/systemd/system/configlock.service
-sudo systemctl daemon-reload
+systemctl --user stop configlock
+systemctl --user disable configlock
+rm ~/.config/systemd/user/configlock.service
+systemctl --user daemon-reload
 
 # macOS
-sudo launchctl unload /Library/LaunchDaemons/com.configlock.daemon.plist
-sudo rm /Library/LaunchDaemons/com.configlock.daemon.plist
+launchctl unload ~/Library/LaunchAgents/com.configlock.daemon.plist
+rm ~/Library/LaunchAgents/com.configlock.daemon.plist
 
 # Remove config and binary
 rm -rf ~/.config/configlock
-sudo rm /usr/local/bin/configlock
+rm /usr/local/bin/configlock
 ```
 
 ## Development

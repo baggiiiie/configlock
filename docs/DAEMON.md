@@ -7,7 +7,6 @@ The daemon runs continuously as a system service, enforcing immutable flags on l
 ### Entry Point
 
 - Subcommand: `configlock daemon` (hidden from help).
-- Must run as root (`os.Getuid() == 0`).
 
 ### Configuration Structure
 
@@ -39,7 +38,7 @@ type Config struct {
       - macOS: chflags schg -R <path>
   - Log action.
 
-1. Log all significant events (lock applied, attempt detected, errors) to /var/log/configlock.log (or ~/Library/Logs/configlock.log on macOS).
+1. Log all significant events (lock applied, attempt detected, errors) to ~/.local/share/configlock/configlock.log (or ~/Library/Logs/configlock.log on macOS).
 
 ## Locking Functions
 

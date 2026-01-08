@@ -21,11 +21,6 @@ func init() {
 }
 
 func runDaemon(cmd *cobra.Command, args []string) error {
-	// Check if running as root
-	if os.Getuid() != 0 {
-		return fmt.Errorf("daemon must run as root")
-	}
-
 	// Create and start daemon
 	d, err := daemon.New()
 	if err != nil {

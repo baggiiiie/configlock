@@ -25,12 +25,12 @@ ConfigLock is a CLI tool and daemon written in Go that prevents editing of speci
 ### Installation
 
 - Build from source: `go build -o configlock`.
-- Run `sudo configlock init` to set up the daemon.
+- Run `configlock init` to set up the daemon.
 
 ### Usage Examples
 
 ```
-sudo configlock init
+configlock init
 configlock add ~/.zshrc
 configlock add ~/.config/nvim
 configlock temp-unlock ~/.zshrc

@@ -5,7 +5,6 @@ Use `github.com/spf13/cobra` for CLI parsing (recommended) or the standard `flag
 
 ### configlock init
 - **Purpose**: Initialize the program.
-- **Requirements**: Must run with sudo (check `os.Getuid() == 0`).
 - **Steps**:
   1. Create config directory `~/.config/configlock` if it doesn't exist.
   2. Prompt user for work start time (default "08:00"), end time (default "17:00"), and temp-unlock duration in minutes (default 5).
