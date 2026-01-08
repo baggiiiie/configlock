@@ -14,7 +14,9 @@ var rootCmd = &cobra.Command{
 	Short: "ConfigLock - A productivity enforcer for config files",
 	Long: `ConfigLock is a CLI tool and daemon that prevents editing of specified
 config files or directories during work hours using system-level immutable flags.`,
-	Version: version,
+	Version:       version,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 // Execute runs the root command
