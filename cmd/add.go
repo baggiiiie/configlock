@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var noBackup bool
+var backup bool
 
 var addCmd = &cobra.Command{
 	Use:   "add <path>",
@@ -24,7 +24,7 @@ all files in the directory (excluding .git/ and .jj/) will be added recursively.
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().BoolVar(&noBackup, "no-backup", false, "Skip creating .bak backup files")
+	addCmd.Flags().BoolVar(&backup, "backup", false, "Create .bak backup files before locking")
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
@@ -64,7 +64,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create backups if requested
-	if !noBackup {
+	if backup {
 		fmt.Println("Creating backups...")
 		if info.IsDir() {
 			// Collect all files for backup purposes

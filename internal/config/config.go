@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/baggiiiie/configlock/internal/locker"
 )
 
 // Config represents the configlock configuration
@@ -65,6 +67,16 @@ func (c *Config) Save() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Unlock config file before writing (if it's locked)
+	// This allows configlock to modify its own config file even when locked
+	wasLocked := false
+	if locked, err := locker.IsLocked(configPath); err == nil && locked {
+		wasLocked = true
+		if err := locker.Unlock(configPath); err != nil {
+			return fmt.Errorf("failed to unlock config for writing: %w", err)
+		}
+	}
+
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
@@ -78,6 +90,13 @@ func (c *Config) Save() error {
 
 	if err := os.Rename(tmpPath, configPath); err != nil {
 		return fmt.Errorf("failed to rename config: %w", err)
+	}
+
+	// Re-lock config file after writing (if it was locked before)
+	if wasLocked {
+		if err := locker.Lock(configPath); err != nil {
+			return fmt.Errorf("failed to re-lock config after writing: %w", err)
+		}
 	}
 
 	return nil
@@ -130,17 +149,21 @@ func (c *Config) RemoveTempExclude(path string) {
 }
 
 // CleanExpiredExcludes removes expired temporary exclusions
-func (c *Config) CleanExpiredExcludes() {
+// Returns true if any exclusions were removed
+func (c *Config) CleanExpiredExcludes() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	cleaned := false
 	now := time.Now()
 	for path, expiryStr := range c.TempExcludes {
 		expiry, err := time.Parse(time.RFC3339, expiryStr)
 		if err != nil || expiry.Before(now) {
 			delete(c.TempExcludes, path)
+			cleaned = true
 		}
 	}
+	return cleaned
 }
 
 // IsTemporarilyExcluded checks if a path is temporarily excluded

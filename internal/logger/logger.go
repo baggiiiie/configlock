@@ -182,3 +182,10 @@ func (l *Logger) SetOutput(w io.Writer) {
 		l.logger = log.New(io.MultiWriter(l.file, w), "", 0)
 	}
 }
+
+// GetLogPath returns the path to the log file
+func (l *Logger) GetLogPath() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.logPath
+}

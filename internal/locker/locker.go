@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/baggiiiie/configlock/internal/fileutil"
+	"github.com/baggiiiie/configlock/internal/logger"
 )
 
 // Lock applies immutable flags to a path recursively
@@ -114,8 +115,10 @@ func lockLinux(path string) error {
 		if err := fallbackLock(path); err != nil {
 			return fmt.Errorf("chattr failed and fallback failed: %v, output: %s", err, string(output))
 		}
+		logger.GetLogger().Infof("LOCK (fallback): chattr +i %s", path)
 		return nil
 	}
+	logger.GetLogger().Infof("LOCK: chattr +i %s", path)
 	return nil
 }
 
@@ -128,8 +131,10 @@ func unlockLinux(path string) error {
 		if err := fallbackUnlock(path); err != nil {
 			return fmt.Errorf("chattr failed and fallback failed: %v, output: %s", err, string(output))
 		}
+		logger.GetLogger().Infof("UNLOCK (fallback): chattr -i %s", path)
 		return nil
 	}
+	logger.GetLogger().Infof("UNLOCK: chattr -i %s", path)
 	return nil
 }
 
@@ -142,8 +147,10 @@ func lockDarwin(path string) error {
 		if err := fallbackLock(path); err != nil {
 			return fmt.Errorf("chflags failed and fallback failed: %v, output: %s", err, string(output))
 		}
+		logger.GetLogger().Infof("LOCK (fallback): chflags schg %s", path)
 		return nil
 	}
+	logger.GetLogger().Infof("LOCK: chflags schg %s", path)
 	return nil
 }
 
@@ -156,8 +163,10 @@ func unlockDarwin(path string) error {
 		if err := fallbackUnlock(path); err != nil {
 			return fmt.Errorf("chflags failed and fallback failed: %v, output: %s", err, string(output))
 		}
+		logger.GetLogger().Infof("UNLOCK (fallback): chflags noschg %s", path)
 		return nil
 	}
+	logger.GetLogger().Infof("UNLOCK: chflags noschg %s", path)
 	return nil
 }
 

@@ -94,7 +94,14 @@ func (d *Daemon) Start() error {
 			}
 
 		case event := <-d.watcher.Events:
-			d.logger.Infof("File event detected: %s %s", event.Op, event.Name)
+			// Ignore events on configlock's own config file to prevent log spam
+			configDir := config.GetConfigDir()
+			configPath := config.GetConfigPath()
+			if event.Name != configPath && event.Name != configDir &&
+			   !strings.HasPrefix(event.Name, configDir+string(filepath.Separator)) {
+				d.logger.Infof("File event detected: %s %s", event.Op, event.Name)
+			}
+
 			// Re-apply locks immediately on any file change detected by fsnotify
 			// This provides instant reaction to modifications, deletions, renames, etc.
 			if d.cfg.IsWithinWorkHours() {
@@ -173,10 +180,11 @@ func (d *Daemon) enforce() {
 	}
 	d.cfg = cfg
 
-	// Clean expired temporary exclusions
-	d.cfg.CleanExpiredExcludes()
-	if err := d.cfg.Save(); err != nil {
-		d.logger.Errorf("Failed to save config after cleaning exclusions: %v", err)
+	// Clean expired temporary exclusions and save only if something was cleaned
+	if d.cfg.CleanExpiredExcludes() {
+		if err := d.cfg.Save(); err != nil {
+			d.logger.Errorf("Failed to save config after cleaning exclusions: %v", err)
+		}
 	}
 
 	// Check if within work hours
@@ -205,6 +213,14 @@ func (d *Daemon) enforce() {
 
 // handleFileEvent processes a file system event and re-locks the appropriate path
 func (d *Daemon) handleFileEvent(eventPath string) {
+	// Ignore events on configlock's own config file to prevent feedback loop
+	configDir := config.GetConfigDir()
+	configPath := config.GetConfigPath()
+	if eventPath == configPath || eventPath == configDir ||
+	   strings.HasPrefix(eventPath, configDir+string(filepath.Separator)) {
+		return
+	}
+
 	// Find all locked paths that match or contain this event path
 	for _, lockedPath := range d.cfg.LockedPaths {
 		// Skip if temporarily excluded

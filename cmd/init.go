@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/baggiiiie/configlock/internal/config"
+	"github.com/baggiiiie/configlock/internal/locker"
 	"github.com/baggiiiie/configlock/internal/service"
 	"github.com/spf13/cobra"
 )
@@ -87,6 +88,18 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("✓ Config created at %s\n", configPath)
+
+	// Apply lock to config file immediately if within work hours
+	if cfg.IsWithinWorkHours() {
+		fmt.Println("Applying lock to config file (within work hours)...")
+		if err := locker.Lock(configPath); err != nil {
+			fmt.Printf("Warning: failed to lock config file %s: %v\n", configPath, err)
+		} else {
+			fmt.Println("✓ Config file locked")
+		}
+	} else {
+		fmt.Println("Note: Outside work hours. Config file will be locked during work hours.")
+	}
 
 	// Install and start daemon
 	fmt.Println("Installing daemon service...")
