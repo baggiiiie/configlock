@@ -5,19 +5,23 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/baggiiiie/configlock/internal/locker"
+	"github.com/robfig/cron/v3"
 )
 
 // Config represents the configlock configuration
 type Config struct {
 	LockedPaths  []string          `json:"locked_paths"`
-	StartTime    string            `json:"start_time"`    // "08:00"
-	EndTime      string            `json:"end_time"`      // "17:00"
-	TempDuration int               `json:"temp_duration"` // minutes
-	TempExcludes map[string]string `json:"temp_excludes"` // path -> expiration ISO8601
+	StartTime    string            `json:"start_time"`     // "08:00" (used if CronSchedule is empty)
+	EndTime      string            `json:"end_time"`       // "17:00" (used if CronSchedule is empty)
+	CronSchedule string            `json:"cron_schedule"`  // Optional: cron expression for work hours (e.g., "0 8-17 * * 1-5" for 8am-5pm weekdays)
+	TempDuration int               `json:"temp_duration"`  // minutes
+	TempExcludes map[string]string `json:"temp_excludes"`  // path -> expiration ISO8601
 	mu           sync.RWMutex      `json:"-"`
 }
 
@@ -187,10 +191,17 @@ func (c *Config) IsTemporarilyExcluded(path string) bool {
 	return expiry.After(time.Now())
 }
 
-// IsWithinWorkHours checks if the current time is within work hours on a weekday
+// IsWithinWorkHours checks if the current time is within work hours
+// If CronSchedule is defined, it uses that; otherwise uses StartTime/EndTime
 func (c *Config) IsWithinWorkHours() bool {
 	now := time.Now()
 
+	// If cron schedule is defined, use it
+	if c.CronSchedule != "" {
+		return c.isWithinCronSchedule(now)
+	}
+
+	// Otherwise, use simple start/end time logic
 	// Check if weekday (Monday = 1, Sunday = 0)
 	weekday := now.Weekday()
 	if weekday == time.Saturday || weekday == time.Sunday {
@@ -216,13 +227,117 @@ func (c *Config) IsWithinWorkHours() bool {
 	return (currentTime.Equal(start) || currentTime.After(start)) && currentTime.Before(end)
 }
 
+// isWithinCronSchedule checks if the current time matches the cron schedule
+// For work hours, we interpret the cron schedule as defining when locks should be active
+// The schedule should match if the cron would trigger at the current hour
+func (c *Config) isWithinCronSchedule(now time.Time) bool {
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	schedule, err := parser.Parse(c.CronSchedule)
+	if err != nil {
+		// If parsing fails, log error and return false
+		return false
+	}
+
+	// Round current time to the start of the current minute
+	currentMinute := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), 0, 0, now.Location())
+
+	// Check if the schedule would trigger at the current minute
+	// We look for the next scheduled time from one minute ago
+	oneMinuteAgo := currentMinute.Add(-1 * time.Minute)
+	nextTrigger := schedule.Next(oneMinuteAgo)
+
+	// If the next trigger is at or before the current minute, we're within work hours
+	return !nextTrigger.After(currentMinute)
+}
+
+// ValidateCronSchedule validates a cron schedule expression
+func ValidateCronSchedule(cronExpr string) error {
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	_, err := parser.Parse(cronExpr)
+	if err != nil {
+		return fmt.Errorf("invalid cron expression: %w", err)
+	}
+	return nil
+}
+
 // CreateDefault creates a new config with default values
 func CreateDefault(startTime, endTime string, tempDuration int) *Config {
 	return &Config{
 		LockedPaths:  []string{},
 		StartTime:    startTime,
 		EndTime:      endTime,
+		CronSchedule: "", // Empty by default, uses StartTime/EndTime
 		TempDuration: tempDuration,
 		TempExcludes: make(map[string]string),
 	}
+}
+
+// CreateWithCron creates a new config with cron schedule
+func CreateWithCron(cronSchedule string, tempDuration int) *Config {
+	return &Config{
+		LockedPaths:  []string{},
+		StartTime:    "",
+		EndTime:      "",
+		CronSchedule: cronSchedule,
+		TempDuration: tempDuration,
+		TempExcludes: make(map[string]string),
+	}
+}
+
+// NormalizeTimeInput normalizes time input to "HH:MM" format
+// Accepts formats: "HH:MM", "HHMM", "H:MM", "HMM"
+// Examples: "08:00", "0800", "8:00", "800" all become "08:00"
+func NormalizeTimeInput(input string) (string, error) {
+	input = strings.TrimSpace(input)
+
+	// If it already has a colon, validate and return
+	if strings.Contains(input, ":") {
+		parts := strings.Split(input, ":")
+		if len(parts) != 2 {
+			return "", fmt.Errorf("invalid time format: %s (expected HH:MM or HHMM)", input)
+		}
+		// Validate the format
+		_, err := time.Parse("15:04", input)
+		if err != nil {
+			return "", fmt.Errorf("invalid time format: %s (expected HH:MM or HHMM)", input)
+		}
+		return input, nil
+	}
+
+	// Handle formats without colon: HHMM or HMM
+	// Remove any non-digit characters
+	re := regexp.MustCompile(`\D`)
+	digits := re.ReplaceAllString(input, "")
+
+	var hour, minute string
+	switch len(digits) {
+	case 3:
+		// HMM format (e.g., "830" -> "08:30")
+		hour = "0" + digits[0:1]
+		minute = digits[1:3]
+	case 4:
+		// HHMM format (e.g., "0830" -> "08:30")
+		hour = digits[0:2]
+		minute = digits[2:4]
+	case 2:
+		// HH format (e.g., "08" -> "08:00")
+		hour = digits[0:2]
+		minute = "00"
+	case 1:
+		// H format (e.g., "8" -> "08:00")
+		hour = "0" + digits[0:1]
+		minute = "00"
+	default:
+		return "", fmt.Errorf("invalid time format: %s (expected HH:MM or HHMM)", input)
+	}
+
+	normalized := fmt.Sprintf("%s:%s", hour, minute)
+
+	// Validate the result
+	_, err := time.Parse("15:04", normalized)
+	if err != nil {
+		return "", fmt.Errorf("invalid time: %s (hours must be 00-23, minutes must be 00-59)", input)
+	}
+
+	return normalized, nil
 }

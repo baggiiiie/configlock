@@ -81,10 +81,17 @@ configlock init
 
 This will:
 1. Create the config directory at `~/.config/configlock/`
-2. Prompt you for work hours (default 08:00 - 17:00)
+2. Prompt you for work hours - you can enter either:
+   - Simple time range: Just enter start time (e.g., `0800` or `08:00`), then end time
+   - Cron schedule: Use `cron:` prefix (e.g., `cron:0 8-17 * * 1-5`)
 3. Prompt you for temp unlock duration (default 5 minutes)
 4. Install and start the daemon as a system service
 5. Automatically add the config file itself to the lock list
+
+**Time Input Formats**:
+- Simple times: `HH:MM` or `HHMM` (e.g., `14:30` or `1430`) - the colon is optional!
+- Cron schedule: `cron:MIN HOUR DAY MONTH WEEKDAY` (e.g., `cron:0 8-17 * * 1-5`)
+- Invalid input will prompt you to retry
 
 ### Adding Files/Directories to Lock
 
@@ -118,6 +125,30 @@ View current status:
 configlock status
 ```
 
+### Editing Work Hours
+
+Need to change your work hours or switch between simple time range and cron schedule mode?
+
+```bash
+configlock edit time
+```
+
+This will:
+1. Show your current work hours configuration
+2. Prompt you to update work hours - you can enter either:
+   - Simple time range: Enter start time (e.g., `0800`), then end time
+   - Cron schedule: Use `cron:` prefix (e.g., `cron:0 9-17 * * 1-5`)
+   - Press Enter to keep current configuration
+3. Optionally update the temporary unlock duration
+4. Invalid input will prompt you to retry
+
+After updating, restart the daemon for changes to take effect:
+
+```bash
+configlock stop
+configlock start
+```
+
 ### Temporarily Unlocking Files
 
 Need to edit something urgently? Temporarily unlock a path:
@@ -146,7 +177,9 @@ configlock rm ~/.config/nvim
 
 ## Configuration
 
-The configuration file is stored at `~/.config/configlock/config.json`:
+The configuration file is stored at `~/.config/configlock/config.json`.
+
+### Simple Time Range Mode
 
 ```json
 {
@@ -156,6 +189,25 @@ The configuration file is stored at `~/.config/configlock/config.json`:
   ],
   "start_time": "08:00",
   "end_time": "17:00",
+  "cron_schedule": "",
+  "temp_duration": 5,
+  "temp_excludes": {}
+}
+```
+
+### Cron Schedule Mode
+
+For more complex schedules, you can use cron expressions:
+
+```json
+{
+  "locked_paths": [
+    "/home/user/.zshrc",
+    "/home/user/.config/nvim/init.lua"
+  ],
+  "start_time": "",
+  "end_time": "",
+  "cron_schedule": "0 8-17 * * 1-5",
   "temp_duration": 5,
   "temp_excludes": {}
 }
@@ -164,10 +216,24 @@ The configuration file is stored at `~/.config/configlock/config.json`:
 ### Configuration Fields
 
 - `locked_paths`: Array of absolute paths to lock
-- `start_time`: Work start time in HH:MM format
-- `end_time`: Work end time in HH:MM format
+- `start_time`: Work start time in HH:MM format (used when `cron_schedule` is empty)
+- `end_time`: Work end time in HH:MM format (used when `cron_schedule` is empty)
+- `cron_schedule`: Optional cron expression for advanced scheduling (takes priority over `start_time`/`end_time`)
 - `temp_duration`: Default duration for temporary unlocks (minutes)
 - `temp_excludes`: Map of temporarily excluded paths with expiration timestamps
+
+### Cron Schedule Examples
+
+Cron format: `MIN HOUR DAY MONTH WEEKDAY`
+
+When using cron schedules during `configlock init` or `configlock edit time`, prefix with `cron:`:
+
+- `cron:0 8-17 * * 1-5` - Every hour from 8am-5pm on weekdays
+- `cron:0 9-12,14-17 * * 1-5` - 9am-12pm and 2pm-5pm on weekdays (excluding lunch hour)
+- `cron:0 10-18 * * 1-6` - 10am-6pm Monday through Saturday
+- `cron:*/30 8-17 * * 1-5` - Every 30 minutes from 8am-5pm on weekdays
+
+In the config file, the cron expression is stored without the `cron:` prefix in the `cron_schedule` field.
 
 **Note**: The config file itself is automatically locked to prevent cheating!
 
@@ -371,6 +437,7 @@ Releases are automated via GitHub Actions. To create a new release:
 - `github.com/spf13/cobra` - CLI framework
 - `github.com/fsnotify/fsnotify` - File system notifications
 - `github.com/kardianos/service` - Cross-platform service management
+- `github.com/robfig/cron/v3` - Cron expression parsing
 
 ## License
 
