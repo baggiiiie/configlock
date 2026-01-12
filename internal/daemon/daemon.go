@@ -45,9 +45,9 @@ func New() (*Daemon, error) {
 // Start starts the daemon
 //
 // The daemon uses two mechanisms to ensure immutable flags stay applied:
-// 1. File system watching (fsnotify) - provides instant reaction to changes
-// 2. Periodic sweep (every 30 seconds) - catches changes that fsnotify might miss,
-//    such as manual flag removal via 'sudo chattr -i' or 'sudo chflags noschg'
+//  1. File system watching (fsnotify) - provides instant reaction to changes
+//  2. Periodic sweep (every 30 seconds) - catches changes that fsnotify might miss,
+//     such as manual flag removal via 'sudo chattr -i' or 'sudo chflags noschg'
 func (d *Daemon) Start() error {
 	d.logger.Info("Starting configlock daemon")
 
@@ -98,7 +98,7 @@ func (d *Daemon) Start() error {
 			configDir := config.GetConfigDir()
 			configPath := config.GetConfigPath()
 			if event.Name != configPath && event.Name != configDir &&
-			   !strings.HasPrefix(event.Name, configDir+string(filepath.Separator)) {
+				!strings.HasPrefix(event.Name, configDir+string(filepath.Separator)) {
 				d.logger.Infof("File event detected: %s %s", event.Op, event.Name)
 			}
 
@@ -217,7 +217,7 @@ func (d *Daemon) handleFileEvent(eventPath string) {
 	configDir := config.GetConfigDir()
 	configPath := config.GetConfigPath()
 	if eventPath == configPath || eventPath == configDir ||
-	   strings.HasPrefix(eventPath, configDir+string(filepath.Separator)) {
+		strings.HasPrefix(eventPath, configDir+string(filepath.Separator)) {
 		return
 	}
 
@@ -260,4 +260,3 @@ func (d *Daemon) lockPath(path string) {
 		d.logger.Infof("Locked: %s", path)
 	}
 }
-

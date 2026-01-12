@@ -31,7 +31,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Work hours
-	fmt.Printf("Work Hours: %s - %s (weekdays only)\n", cfg.StartTime, cfg.EndTime)
+	fmt.Printf("Work Hours: %s - %s\n", cfg.StartTime, cfg.EndTime)
 	fmt.Printf("Temp Unlock Duration: %d minutes\n", cfg.TempDuration)
 	fmt.Println()
 
@@ -41,15 +41,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	withinWorkHours := cfg.IsWithinWorkHours()
 
 	fmt.Printf("Current Time: %s\n", now.Format("Monday, 02 Jan 2006 15:04:05"))
-	fmt.Printf("Day: %s\n", weekday)
 
 	if withinWorkHours {
-		fmt.Println("Status: 🔒 LOCKED (within work hours)")
+		fmt.Println("Status: 🔒 LOCKED")
 	} else {
 		if weekday == time.Saturday || weekday == time.Sunday {
-			fmt.Println("Status: 🔓 UNLOCKED (weekend)")
+			fmt.Println("Status: 🔓 UNLOCKED")
 		} else {
-			fmt.Println("Status: 🔓 UNLOCKED (outside work hours)")
+			fmt.Println("Status: 🔓 UNLOCKED")
 		}
 	}
 	fmt.Println()

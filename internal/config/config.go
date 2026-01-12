@@ -17,11 +17,11 @@ import (
 // Config represents the configlock configuration
 type Config struct {
 	LockedPaths  []string          `json:"locked_paths"`
-	StartTime    string            `json:"start_time"`     // "08:00" (used if CronSchedule is empty)
-	EndTime      string            `json:"end_time"`       // "17:00" (used if CronSchedule is empty)
-	CronSchedule string            `json:"cron_schedule"`  // Optional: cron expression for work hours (e.g., "0 8-17 * * 1-5" for 8am-5pm weekdays)
-	TempDuration int               `json:"temp_duration"`  // minutes
-	TempExcludes map[string]string `json:"temp_excludes"`  // path -> expiration ISO8601
+	StartTime    string            `json:"start_time"`    // "08:00" (used if CronSchedule is empty)
+	EndTime      string            `json:"end_time"`      // "17:00" (used if CronSchedule is empty)
+	CronSchedule string            `json:"cron_schedule"` // Optional: cron expression for work hours (e.g., "0 8-17 * * 1-5" for 8am-5pm weekdays)
+	TempDuration int               `json:"temp_duration"` // minutes
+	TempExcludes map[string]string `json:"temp_excludes"` // path -> expiration ISO8601
 	mu           sync.RWMutex      `json:"-"`
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/baggiiiie/configlock/internal/service"
+	kardianos "github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
 
@@ -22,12 +23,21 @@ func init() {
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
-	fmt.Println("Starting configlock daemon...")
-
 	svc, err := service.New()
 	if err != nil {
 		return fmt.Errorf("failed to create service: %w", err)
 	}
+
+	// Check current service status
+	status, err := svc.Status()
+	if err == nil {
+		if status == kardianos.StatusRunning {
+			fmt.Println("ConfigLock daemon is already running.")
+			return nil
+		}
+	}
+
+	fmt.Println("Starting configlock daemon...")
 
 	if err := svc.Start(); err != nil {
 		return fmt.Errorf("failed to start service: %w", err)
