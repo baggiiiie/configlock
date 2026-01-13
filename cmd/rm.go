@@ -8,6 +8,8 @@ import (
 	"github.com/baggiiiie/configlock/internal/challenge"
 	"github.com/baggiiiie/configlock/internal/config"
 	"github.com/baggiiiie/configlock/internal/locker"
+	"github.com/baggiiiie/configlock/internal/service"
+	kardianos "github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
 
@@ -79,6 +81,25 @@ func runRm(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Warning: failed to unlock %s: %v\n", absPath, err)
 	} else {
 		fmt.Println("✓ Path unlocked")
+	}
+
+	// Restart daemon if running to pick up configuration changes
+	svc, err := service.New()
+	if err == nil {
+		status, err := svc.Status()
+		if err == nil && status == kardianos.StatusRunning {
+			fmt.Println("\nRestarting daemon to apply configuration changes...")
+			if err := svc.Restart(); err != nil {
+				// Restart might not be supported, try stop+start
+				if err := svc.Stop(); err == nil {
+					if err := svc.Start(); err != nil {
+						fmt.Printf("Warning: failed to restart daemon: %v\n", err)
+						return nil
+					}
+				}
+			}
+			fmt.Println("✓ Daemon restarted")
+		}
 	}
 
 	return nil

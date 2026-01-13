@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/baggiiiie/configlock/internal/config"
+	"github.com/baggiiiie/configlock/internal/service"
+	kardianos "github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
 
@@ -17,8 +19,8 @@ var editTimeCmd = &cobra.Command{
 	Long: `Edit the work hours configuration for ConfigLock.
 
 This allows you to change between simple time range mode and cron schedule mode,
-or update the existing time settings. The daemon will need to be restarted for
-changes to take effect.`,
+or update the existing time settings. If the daemon is running, it will be
+automatically restarted to apply the changes immediately.`,
 	RunE: runEditTime,
 }
 
@@ -148,9 +150,40 @@ func runEditTime(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\n✓ Configuration updated successfully!")
-	fmt.Println("\nTo apply the changes, restart the daemon:")
-	fmt.Println("  configlock stop")
-	fmt.Println("  configlock start")
+
+	// Automatically restart daemon if it's running
+	svc, err := service.New()
+	if err != nil {
+		fmt.Printf("\nWarning: failed to create service: %v\n", err)
+		fmt.Println("\nTo apply the changes manually, restart the daemon:")
+		fmt.Println("  configlock stop")
+		fmt.Println("  configlock start")
+		return nil
+	}
+
+	// Check if daemon is running
+	status, err := svc.Status()
+	if err != nil || status != kardianos.StatusRunning {
+		fmt.Println("\nDaemon is not running. Changes will take effect when you start it:")
+		fmt.Println("  configlock start")
+		return nil
+	}
+
+	// Restart the daemon to apply changes
+	fmt.Println("\nRestarting daemon to apply changes...")
+	if err := svc.Restart(); err != nil {
+		// Restart might not be supported on all platforms, try stop+start
+		fmt.Println("Restart not supported, stopping and starting daemon...")
+		if err := svc.Stop(); err != nil {
+			fmt.Printf("Warning: failed to stop daemon: %v\n", err)
+		}
+		if err := svc.Start(); err != nil {
+			return fmt.Errorf("failed to start daemon: %w", err)
+		}
+	}
+
+	fmt.Println("✓ Daemon restarted successfully")
+	fmt.Println("\nYour configuration changes are now active!")
 
 	return nil
 }

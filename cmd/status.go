@@ -26,14 +26,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	fmt.Println("ConfigLock Status")
-	fmt.Println("=================")
-	fmt.Println()
-
-	// Work hours
-	fmt.Printf("Work Hours: %s - %s\n", cfg.StartTime, cfg.EndTime)
-	fmt.Printf("Temp Unlock Duration: %d minutes\n", cfg.TempDuration)
-	fmt.Println()
+	fmt.Printf("Lock Hours: %s - %s\n", cfg.StartTime, cfg.EndTime)
 
 	// Current state
 	now := time.Now()
@@ -60,6 +53,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
+	fmt.Printf("Temp Unlock Duration: %d minutes\n", cfg.TempDuration)
 	// Temporary exclusions
 	cfg.CleanExpiredExcludes()
 	if len(cfg.TempExcludes) > 0 {
