@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/baggiiiie/configlock/internal/config"
+	"github.com/baggiiiie/configlock/internal/service"
+	kardianos "github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
 
@@ -44,6 +46,31 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			fmt.Println("Status: 🔓 UNLOCKED")
 		}
 	}
+
+	// Check daemon status
+	svc, err := service.New()
+	var daemonRunning bool
+	if err == nil {
+		status, err := svc.Status()
+		if err == nil && status == kardianos.StatusRunning {
+			daemonRunning = true
+			fmt.Println("Daemon: ✓ Running")
+		} else {
+			daemonRunning = false
+			fmt.Println("Daemon: ✗ Not running")
+		}
+	} else {
+		fmt.Printf("Daemon: ⚠ Unable to check status (%v)\n", err)
+	}
+
+	// Show warning if there's a mismatch
+	if withinWorkHours && !daemonRunning {
+		fmt.Println("\n⚠️  WARNING: During lock hours but daemon not running!")
+		fmt.Println("    Locks will not be enforced. Run 'configlock start' to start the daemon.")
+	} else if !withinWorkHours && daemonRunning {
+		fmt.Println("\n✓ Daemon is running and will enforce locks during work hours.")
+	}
+
 	fmt.Println()
 
 	// Locked paths
