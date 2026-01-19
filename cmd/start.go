@@ -30,20 +30,24 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	// Check current service status
 	status, err := svc.Status()
-	if err == nil {
-		if status == kardianos.StatusRunning {
-			fmt.Println("ConfigLock daemon is already running.")
-			return nil
+	if err != nil {
+		// Service not installed, install it first
+		fmt.Println("Installing configlock service...")
+		if err := svc.Install(); err != nil {
+			return fmt.Errorf("failed to install service: %w", err)
 		}
+	} else if status == kardianos.StatusRunning {
+		fmt.Println("ConfigLock daemon is already running.")
+		return nil
 	}
 
 	fmt.Println("Starting configlock daemon...")
 
 	if err := svc.Start(); err != nil {
-		return fmt.Errorf("failed to start service: %w", err)
+		return fmt.Errorf("runStart: %w", err)
 	}
 
-	fmt.Println("✓ Daemon started successfully")
+	fmt.Println("Daemon started successfully")
 	fmt.Println("\nConfigLock is now active and will enforce locks during work hours.")
 
 	return nil
