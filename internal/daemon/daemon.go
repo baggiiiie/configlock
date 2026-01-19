@@ -88,8 +88,8 @@ func (d *Daemon) Start() error {
 					d.setupWatchers()
 				}
 			} else {
-				// SIGTERM or SIGINT
-				d.Stop()
+				// SIGTERM or SIGINT - graceful shutdown with unlock
+				d.gracefulShutdown()
 				return nil
 			}
 
@@ -117,6 +117,22 @@ func (d *Daemon) Start() error {
 			d.enforce()
 		}
 	}
+}
+
+// gracefulShutdown unlocks all configured paths and stops the daemon
+func (d *Daemon) gracefulShutdown() {
+	d.logger.Info("Graceful shutdown initiated - unlocking all paths")
+
+	// Unlock all configured paths
+	for _, path := range d.cfg.LockedPaths {
+		d.logger.Infof("Unlocking path: %s", path)
+		if err := locker.Unlock(path); err != nil {
+			d.logger.Errorf("Failed to unlock %s: %v", path, err)
+		}
+	}
+
+	d.logger.Info("All paths unlocked, stopping daemon")
+	d.Stop()
 }
 
 // Stop stops the daemon

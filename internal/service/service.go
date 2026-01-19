@@ -43,6 +43,9 @@ func New() (*Service, error) {
 		Option: service.KeyValue{
 			// Install as user service (not system-wide)
 			"UserService": true,
+			// Auto-restart on crash/exit
+			"Restart": "always",
+			"RestartSec": "5",
 		},
 	}
 
