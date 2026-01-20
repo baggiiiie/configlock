@@ -49,7 +49,7 @@ func runRm(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("path not found in lock list: %s", absPath)
 	}
 
-	// Run typing challenge only during work hours
+	// Run typing challenge only during lock hours
 	if cfg.IsWithinWorkHours() {
 		if err := challenge.Run(); err != nil {
 			return fmt.Errorf("challenge failed: %w", err)

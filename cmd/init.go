@@ -17,7 +17,7 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize configlock and install the daemon",
 	Long: `Initialize configlock by creating the configuration file,
-prompting for work hours, and installing the daemon as a system service.`,
+prompting for lock hours, and installing the daemon as a system service.`,
 	RunE: runInit,
 }
 
@@ -47,10 +47,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Prompt for work hours configuration
+	// Prompt for lock hours configuration
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("\nWork hours configuration:")
+	fmt.Println("\nlock hours configuration:")
 	fmt.Println("  - Simple time range: Enter start time (e.g., 0800 or 08:00)")
 	fmt.Println("  - Cron schedule: Use 'cron:' prefix (e.g., cron:0 8-17 * * 1-5)")
 
@@ -59,7 +59,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Get start time or cron schedule with retry
 	for {
-		fmt.Print("\nWork hours start time or cron schedule (default 08:00): ")
+		fmt.Print("\nlock hours start time or cron schedule (default 08:00): ")
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
 
@@ -111,7 +111,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 		// Get end time with retry
 		for {
-			fmt.Print("Work hours end time (default 17:00): ")
+			fmt.Print("lock hours end time (default 17:00): ")
 			endInput, _ := reader.ReadString('\n')
 			endInput = strings.TrimSpace(endInput)
 
@@ -156,16 +156,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("✓ Config created at %s\n", configPath)
 
-	// Apply lock to config file immediately if within work hours
+	// Apply lock to config file immediately if within lock hours
 	if cfg.IsWithinWorkHours() {
-		fmt.Println("Applying lock to config file (within work hours)...")
+		fmt.Println("Applying lock to config file (within lock hours)...")
 		if err := locker.Lock(configPath); err != nil {
 			fmt.Printf("Warning: failed to lock config file %s: %v\n", configPath, err)
 		} else {
 			fmt.Println("✓ Config file locked")
 		}
 	} else {
-		fmt.Println("Note: Outside work hours. Config file will be locked during work hours.")
+		fmt.Println("Note: Outside lock hours. Config file will be locked during lock hours.")
 	}
 
 	// Install and start daemon
@@ -190,9 +190,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("✓ Daemon started successfully")
 	fmt.Println("\nConfigLock is now active!")
 	if cfg.CronSchedule != "" {
-		fmt.Printf("Work hours: %s (cron schedule)\n", cfg.CronSchedule)
+		fmt.Printf("lock hours: %s (cron schedule)\n", cfg.CronSchedule)
 	} else {
-		fmt.Printf("Work hours: %s - %s (weekdays only)\n", startTime, endTime)
+		fmt.Printf("lock hours: %s - %s (weekdays only)\n", startTime, endTime)
 	}
 	fmt.Println("Use 'configlock add <path>' to add files/directories to lock.")
 

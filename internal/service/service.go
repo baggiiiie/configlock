@@ -37,7 +37,7 @@ func New() (*Service, error) {
 	svcConfig := &service.Config{
 		Name:        "configlock",
 		DisplayName: "ConfigLock Daemon",
-		Description: "Enforces file locking during work hours to prevent impulsive config editing",
+		Description: "Enforces file locking during lock hours to prevent impulsive config editing",
 		Executable:  execPath,
 		Arguments:   []string{"daemon"},
 		Option: service.KeyValue{

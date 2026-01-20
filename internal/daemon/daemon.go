@@ -186,7 +186,7 @@ func (d *Daemon) addWatch(path string) error {
 	return d.watcher.Add(path)
 }
 
-// enforce applies locks to all configured paths if within work hours
+// enforce applies locks to all configured paths if within lock hours
 func (d *Daemon) enforce() {
 	// Reload config to get latest changes
 	cfg, err := config.Load()
@@ -203,13 +203,13 @@ func (d *Daemon) enforce() {
 		}
 	}
 
-	// Check if within work hours
+	// Check if within lock hours
 	if !d.cfg.IsWithinWorkHours() {
-		d.logger.Info("Outside work hours, skipping enforcement")
+		d.logger.Info("Outside lock hours, skipping enforcement")
 		return
 	}
 
-	d.logger.Info("Enforcing locks (within work hours)")
+	d.logger.Info("Enforcing locks (within lock hours)")
 
 	// Apply locks to all paths and verify they're locked
 	for _, path := range d.cfg.LockedPaths {

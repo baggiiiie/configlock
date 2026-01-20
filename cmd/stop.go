@@ -114,7 +114,7 @@ func runStop(cmd *cobra.Command, args []string) error {
 	fmt.Println("To re-enable:")
 	fmt.Println("  - The locked paths are still saved in your config")
 	fmt.Println("  - Run 'configlock start' to restart the daemon")
-	fmt.Println("  - Locks will be re-applied during work hours")
+	fmt.Println("  - Locks will be re-applied during lock hours")
 
 	return nil
 }

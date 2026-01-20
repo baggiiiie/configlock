@@ -101,16 +101,16 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		fmt.Printf("✓ Added file to lock list: %s\n", resolvedPath)
 	}
 
-	// Apply locks immediately if within work hours
+	// Apply locks immediately if within lock hours
 	if cfg.IsWithinWorkHours() {
-		fmt.Println("Applying locks (within work hours)...")
+		fmt.Println("Applying locks (within lock hours)...")
 		if err := locker.Lock(resolvedPath); err != nil {
 			fmt.Printf("Warning: failed to lock %s: %v\n", resolvedPath, err)
 		} else {
 			fmt.Println("✓ Locks applied")
 		}
 	} else {
-		fmt.Println("Note: Outside work hours. Locks will be applied during work hours.")
+		fmt.Println("Note: Outside lock hours. Locks will be applied during lock hours.")
 	}
 
 	// Restart daemon if running to pick up new path

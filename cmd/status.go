@@ -13,7 +13,7 @@ import (
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show current status and configuration",
-	Long:  `Display the current lock status, work hours, and active temporary unlocks.`,
+	Long:  `Display the current lock status, lock hours, and active temporary unlocks.`,
 	RunE:  runStatus,
 }
 
@@ -68,7 +68,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Println("\n⚠️  WARNING: During lock hours but daemon not running!")
 		fmt.Println("    Locks will not be enforced. Run 'configlock start' to start the daemon.")
 	} else if !withinWorkHours && daemonRunning {
-		fmt.Println("\n✓ Daemon is running and will enforce locks during work hours.")
+		fmt.Println("\n✓ Daemon is running and will enforce locks during lock hours.")
 	}
 
 	fmt.Println()

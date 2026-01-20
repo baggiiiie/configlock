@@ -19,7 +19,7 @@ type Config struct {
 	LockedPaths  []string          `json:"locked_paths"`
 	StartTime    string            `json:"start_time"`    // "08:00" (used if CronSchedule is empty)
 	EndTime      string            `json:"end_time"`      // "17:00" (used if CronSchedule is empty)
-	CronSchedule string            `json:"cron_schedule"` // Optional: cron expression for work hours (e.g., "0 8-17 * * 1-5" for 8am-5pm weekdays)
+	CronSchedule string            `json:"cron_schedule"` // Optional: cron expression for lock hours (e.g., "0 8-17 * * 1-5" for 8am-5pm weekdays)
 	TempDuration int               `json:"temp_duration"` // minutes
 	TempExcludes map[string]string `json:"temp_excludes"` // path -> expiration ISO8601
 	mu           sync.RWMutex      `json:"-"`
@@ -191,7 +191,7 @@ func (c *Config) IsTemporarilyExcluded(path string) bool {
 	return expiry.After(time.Now())
 }
 
-// IsWithinWorkHours checks if the current time is within work hours
+// IsWithinWorkHours checks if the current time is within lock hours
 // If CronSchedule is defined, it uses that; otherwise uses StartTime/EndTime
 func (c *Config) IsWithinWorkHours() bool {
 	now := time.Now()
@@ -228,7 +228,7 @@ func (c *Config) IsWithinWorkHours() bool {
 }
 
 // isWithinCronSchedule checks if the current time matches the cron schedule
-// For work hours, we interpret the cron schedule as defining when locks should be active
+// For lock hours, we interpret the cron schedule as defining when locks should be active
 // The schedule should match if the cron would trigger at the current hour
 func (c *Config) isWithinCronSchedule(now time.Time) bool {
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
@@ -246,7 +246,7 @@ func (c *Config) isWithinCronSchedule(now time.Time) bool {
 	oneMinuteAgo := currentMinute.Add(-1 * time.Minute)
 	nextTrigger := schedule.Next(oneMinuteAgo)
 
-	// If the next trigger is at or before the current minute, we're within work hours
+	// If the next trigger is at or before the current minute, we're within lock hours
 	return !nextTrigger.After(currentMinute)
 }
 

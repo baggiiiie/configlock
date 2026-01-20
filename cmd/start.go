@@ -11,7 +11,7 @@ import (
 var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the configlock daemon",
-	Long: `Start the configlock daemon service to begin enforcing locks during work hours.
+	Long: `Start the configlock daemon service to begin enforcing locks during lock hours.
 
 This will start the background daemon that monitors and enforces file locks
 on all paths in your locked paths list.`,
@@ -48,7 +48,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("Daemon started successfully")
-	fmt.Println("\nConfigLock is now active and will enforce locks during work hours.")
+	fmt.Println("\nConfigLock is now active and will enforce locks during lock hours.")
 
 	return nil
 }

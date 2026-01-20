@@ -15,8 +15,8 @@ import (
 
 var editTimeCmd = &cobra.Command{
 	Use:   "edit time",
-	Short: "Edit work hours configuration",
-	Long: `Edit the work hours configuration for ConfigLock.
+	Short: "Edit lock hours configuration",
+	Long: `Edit the lock hours configuration for ConfigLock.
 
 This allows you to change between simple time range mode and cron schedule mode,
 or update the existing time settings. If the daemon is running, it will be
@@ -36,7 +36,7 @@ func runEditTime(cmd *cobra.Command, args []string) error {
 	}
 
 	// Show current configuration
-	fmt.Println("Current work hours configuration:")
+	fmt.Println("Current lock hours configuration:")
 	if cfg.CronSchedule != "" {
 		fmt.Printf("  Mode: Cron schedule\n")
 		fmt.Printf("  Schedule: %s\n", cfg.CronSchedule)
@@ -50,7 +50,7 @@ func runEditTime(cmd *cobra.Command, args []string) error {
 	// Prompt for new configuration
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("\nNew work hours configuration:")
+	fmt.Println("\nNew lock hours configuration:")
 	fmt.Println("  - Simple time range: Enter start time (e.g., 0800 or 08:00)")
 	fmt.Println("  - Cron schedule: Use 'cron:' prefix (e.g., cron:0 8-17 * * 1-5)")
 
@@ -58,13 +58,13 @@ func runEditTime(cmd *cobra.Command, args []string) error {
 
 	// Get start time or cron schedule with retry
 	for {
-		fmt.Print("\nWork hours start time or cron schedule (press Enter to keep current): ")
+		fmt.Print("\nlock hours start time or cron schedule (press Enter to keep current): ")
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
 
 		// If empty, keep current configuration
 		if input == "" {
-			fmt.Println("✓ Keeping current work hours configuration")
+			fmt.Println("✓ Keeping current lock hours configuration")
 			break
 		}
 
@@ -103,7 +103,7 @@ func runEditTime(cmd *cobra.Command, args []string) error {
 
 		// Get end time with retry
 		for {
-			fmt.Print("Work hours end time: ")
+			fmt.Print("lock hours end time: ")
 			endInput, _ := reader.ReadString('\n')
 			endInput = strings.TrimSpace(endInput)
 
