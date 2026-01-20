@@ -8,14 +8,11 @@ import (
 	"slices"
 
 	"github.com/baggiiiie/configlock/internal/config"
-	"github.com/baggiiiie/configlock/internal/fileutil"
 	"github.com/baggiiiie/configlock/internal/locker"
 	"github.com/baggiiiie/configlock/internal/service"
 	kardianos "github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
-
-var backup bool
 
 var addCmd = &cobra.Command{
 	Use:   "add <path>",
@@ -28,7 +25,6 @@ all files in the directory (excluding .git/ and .jj/) will be added recursively.
 
 func init() {
 	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().BoolVar(&backup, "backup", false, "Create .bak backup files before locking")
 }
 
 // resolveAndValidatePath resolves the given path to an absolute path,
@@ -89,29 +85,6 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	if slices.Contains(cfg.LockedPaths, resolvedPath) {
 		fmt.Printf("Path is already in lock list: %s\n", resolvedPath)
 		return nil
-	}
-
-	// Create backups if requested
-	if backup {
-		fmt.Println("Creating backups...")
-		if info.IsDir() {
-			// Collect all files for backup purposes
-			files, err := fileutil.CollectFilesRecursively(resolvedPath)
-			if err != nil {
-				return fmt.Errorf("failed to collect files for backup: %w", err)
-			}
-			for _, p := range files {
-				backupPath := p + ".bak"
-				if err := copyFile(p, backupPath); err != nil {
-					fmt.Printf("Warning: failed to backup %s: %v\n", p, err)
-				}
-			}
-		} else {
-			backupPath := resolvedPath + ".bak"
-			if err := copyFile(resolvedPath, backupPath); err != nil {
-				fmt.Printf("Warning: failed to backup %s: %v\n", resolvedPath, err)
-			}
-		}
 	}
 
 	// Add path to config (just the directory or file path, not individual files)
