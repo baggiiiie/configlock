@@ -22,7 +22,7 @@ func Run() error {
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("\n⚠️  WARNING: You are about to perform an action that may reduce your productivity.")
-	fmt.Println("To proceed, you must type the following statement line by line.\n")
+	fmt.Println("To proceed, you must type the following statement line by line.")
 
 	for i, line := range lines {
 		retries := 0
@@ -60,7 +60,7 @@ func Run() error {
 		}
 	}
 
-	fmt.Println("\n✓ Challenge completed successfully.\n")
+	fmt.Println("\n✓ Challenge completed successfully.")
 	return nil
 }
 

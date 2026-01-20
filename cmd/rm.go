@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/baggiiiie/configlock/internal/challenge"
 	"github.com/baggiiiie/configlock/internal/config"
@@ -42,21 +43,17 @@ func runRm(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check if path exists in config
-	found := false
-	for _, p := range cfg.LockedPaths {
-		if p == absPath {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(cfg.LockedPaths, absPath)
 
 	if !found {
 		return fmt.Errorf("path not found in lock list: %s", absPath)
 	}
 
-	// Run typing challenge
-	if err := challenge.Run(); err != nil {
-		return fmt.Errorf("challenge failed: %w", err)
+	// Run typing challenge only during work hours
+	if cfg.IsWithinWorkHours() {
+		if err := challenge.Run(); err != nil {
+			return fmt.Errorf("challenge failed: %w", err)
+		}
 	}
 
 	// Remove path from config

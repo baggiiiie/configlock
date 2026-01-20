@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/baggiiiie/configlock/internal/config"
 	"github.com/baggiiiie/configlock/internal/fileutil"
@@ -29,35 +31,53 @@ func init() {
 	addCmd.Flags().BoolVar(&backup, "backup", false, "Create .bak backup files before locking")
 }
 
-func runAdd(cmd *cobra.Command, args []string) error {
-	path := args[0]
-
+// resolveAndValidatePath resolves the given path to an absolute path,
+// handles symlinks (both working and broken), and validates the final path exists.
+// Returns the resolved absolute path or an error.
+func resolveAndValidatePath(path string) (string, error) {
 	// Resolve to absolute path
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return fmt.Errorf("failed to resolve path: %w", err)
+		return "", fmt.Errorf("failed to resolve path: %w", err)
 	}
 
-	// Check if path is a symlink and resolve it to the real path
+	// Use Lstat to get info without following symlinks
 	linfo, err := os.Lstat(absPath)
 	if err != nil {
-		return fmt.Errorf("failed to check path: %w", err)
+		if errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("path %s does not exist", path)
+		}
+		return "", fmt.Errorf("failed to check path: %w", err)
 	}
 
+	// Handle symlinks (both working and broken)
 	if linfo.Mode()&os.ModeSymlink != 0 {
 		realPath, err := filepath.EvalSymlinks(absPath)
 		if err != nil {
-			return fmt.Errorf("failed to resolve symlink: %w", err)
+			// Broken symlink
+			target, readErr := os.Readlink(absPath)
+			if readErr != nil {
+				return "", fmt.Errorf("failed to read broken symlink: %w", readErr)
+			}
+			return "", fmt.Errorf("symlink %s -> %s is broken (target does not exist)", absPath, target)
 		}
+
 		fmt.Printf("Resolved symlink %s -> %s\n", absPath, realPath)
-		absPath = realPath
+		return realPath, nil
 	}
 
-	// Check if path exists
-	info, err := os.Stat(absPath)
+	// Regular file or directory
+	return absPath, nil
+}
+
+func runAdd(cmd *cobra.Command, args []string) error {
+	path := args[0]
+
+	resolvedPath, err := resolveAndValidatePath(path)
 	if err != nil {
-		return fmt.Errorf("path does not exist: %s", absPath)
+		return err
 	}
+	info, _ := os.Stat(resolvedPath)
 
 	// Load config
 	cfg, err := config.Load()
@@ -65,12 +85,18 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	// Check if path is already in lock list
+	if slices.Contains(cfg.LockedPaths, resolvedPath) {
+		fmt.Printf("Path is already in lock list: %s\n", resolvedPath)
+		return nil
+	}
+
 	// Create backups if requested
 	if backup {
 		fmt.Println("Creating backups...")
 		if info.IsDir() {
 			// Collect all files for backup purposes
-			files, err := fileutil.CollectFilesRecursively(absPath)
+			files, err := fileutil.CollectFilesRecursively(resolvedPath)
 			if err != nil {
 				return fmt.Errorf("failed to collect files for backup: %w", err)
 			}
@@ -81,15 +107,15 @@ func runAdd(cmd *cobra.Command, args []string) error {
 				}
 			}
 		} else {
-			backupPath := absPath + ".bak"
-			if err := copyFile(absPath, backupPath); err != nil {
-				fmt.Printf("Warning: failed to backup %s: %v\n", absPath, err)
+			backupPath := resolvedPath + ".bak"
+			if err := copyFile(resolvedPath, backupPath); err != nil {
+				fmt.Printf("Warning: failed to backup %s: %v\n", resolvedPath, err)
 			}
 		}
 	}
 
 	// Add path to config (just the directory or file path, not individual files)
-	cfg.AddPath(absPath)
+	cfg.AddPath(resolvedPath)
 
 	// Save config
 	if err := cfg.Save(); err != nil {
@@ -97,16 +123,16 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	if info.IsDir() {
-		fmt.Printf("✓ Added directory to lock list: %s\n", absPath)
+		fmt.Printf("✓ Added directory to lock list: %s\n", resolvedPath)
 	} else {
-		fmt.Printf("✓ Added file to lock list: %s\n", absPath)
+		fmt.Printf("✓ Added file to lock list: %s\n", resolvedPath)
 	}
 
 	// Apply locks immediately if within work hours
 	if cfg.IsWithinWorkHours() {
 		fmt.Println("Applying locks (within work hours)...")
-		if err := locker.Lock(absPath); err != nil {
-			fmt.Printf("Warning: failed to lock %s: %v\n", absPath, err)
+		if err := locker.Lock(resolvedPath); err != nil {
+			fmt.Printf("Warning: failed to lock %s: %v\n", resolvedPath, err)
 		} else {
 			fmt.Println("✓ Locks applied")
 		}
