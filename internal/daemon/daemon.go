@@ -12,14 +12,16 @@ import (
 	"github.com/baggiiiie/configlock/internal/config"
 	"github.com/baggiiiie/configlock/internal/locker"
 	"github.com/baggiiiie/configlock/internal/logger"
+	"github.com/baggiiiie/configlock/internal/notifier"
 	"github.com/fsnotify/fsnotify"
 )
 
 type Daemon struct {
-	cfg     *config.Config
-	watcher *fsnotify.Watcher
-	logger  *logger.Logger
-	stopCh  chan struct{}
+	cfg       *config.Config
+	watcher   *fsnotify.Watcher
+	logger    *logger.Logger
+	notifier  *notifier.Notifier
+	stopCh    chan struct{}
 }
 
 // New creates a new daemon instance
@@ -35,10 +37,11 @@ func New() (*Daemon, error) {
 	}
 
 	return &Daemon{
-		cfg:     cfg,
-		watcher: watcher,
-		logger:  logger.GetLogger(),
-		stopCh:  make(chan struct{}),
+		cfg:       cfg,
+		watcher:   watcher,
+		logger:    logger.GetLogger(),
+		notifier:  notifier.New("ConfigLock"),
+		stopCh:    make(chan struct{}),
 	}, nil
 }
 
@@ -247,12 +250,25 @@ func (d *Daemon) handleFileEvent(eventPath string) {
 		// Check if event path is the locked path itself or within it
 		if eventPath == lockedPath || strings.HasPrefix(eventPath, lockedPath+string(filepath.Separator)) {
 			d.logger.Infof("Event detected on locked path %s, re-applying lock", lockedPath)
+			d.sendManualChangeNotification(lockedPath)
 			d.lockPath(lockedPath)
 		} else if filepath.Dir(eventPath) == filepath.Dir(lockedPath) {
 			// Event in parent directory (e.g., file was deleted/recreated)
 			d.logger.Infof("Event detected in parent of locked path %s, re-applying lock", lockedPath)
+			d.sendManualChangeNotification(lockedPath)
 			d.lockPath(lockedPath)
 		}
+	}
+}
+
+// sendManualChangeNotification sends a system notification when manual changes are detected
+func (d *Daemon) sendManualChangeNotification(path string) {
+	title := "ConfigLock Alert"
+	message := fmt.Sprintf("Detected manual change to locked file: %s\nConfigLock will re-apply the lock.", filepath.Base(path))
+	
+	if err := d.notifier.Notify(title, message); err != nil {
+		d.logger.Warnf("Failed to send notification: %v", err)
+		// Don't fail the entire operation if notification fails
 	}
 }
 
