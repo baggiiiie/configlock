@@ -19,7 +19,7 @@ A CLI tool and daemon that prevents editing of specified config files or directo
 Install ConfigLock with a single command:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/baggiiiie/try-monorepo/main/configlock/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/baggiiiie/configlock/main/configlock/install.sh | bash
 ```
 
 This will automatically:
@@ -34,15 +34,15 @@ configlock init
 
 ### Alternative: Download Pre-built Binary
 
-Download the latest release for your platform from the [releases page](https://github.com/baggiiiie/try-monorepo/releases):
+Download the latest release for your platform from the [releases page](https://github.com/baggiiiie/configlock/releases):
 
 ```bash
 # Download for your platform
 # Linux AMD64
-curl -LO https://github.com/baggiiiie/try-monorepo/releases/latest/download/configlock-linux-amd64
+curl -LO https://github.com/baggiiiie/configlock/releases/latest/download/configlock-linux-amd64
 
 # macOS ARM64 (Apple Silicon)
-curl -LO https://github.com/baggiiiie/try-monorepo/releases/latest/download/configlock-darwin-arm64
+curl -LO https://github.com/baggiiiie/configlock/releases/latest/download/configlock-darwin-arm64
 
 # Make executable and move to PATH
 chmod +x configlock-*
@@ -429,7 +429,7 @@ Releases are automated via GitHub Actions. To create a new release:
 
 3. **Users can then install** with:
    ```bash
-   curl -sSL https://raw.githubusercontent.com/baggiiiie/try-monorepo/main/configlock/install.sh | bash
+   curl -sSL https://raw.githubusercontent.com/baggiiiie/configlock/main/configlock/install.sh | bash
    ```
 
 ### Dependencies

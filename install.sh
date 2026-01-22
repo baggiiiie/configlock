@@ -2,10 +2,10 @@
 set -e
 
 # ConfigLock Installer
-# Usage: curl -sSL https://raw.githubusercontent.com/baggiiiie/try-monorepo/main/configlock/install.sh | bash
+# Usage: curl -sSL https://raw.githubusercontent.com/baggiiiie/configlock/main/configlock/install.sh | bash
 
 # Configuration
-REPO="baggiiiie/try-monorepo"
+REPO="baggiiiie/configlock"
 INSTALL_DIR="$HOME/.local/bin"
 BINARY_NAME="configlock"
 

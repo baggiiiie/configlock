@@ -22,7 +22,7 @@ gh release create configlock-v1.0.0 --generate-notes --title "ConfigLock v1.0.0"
 ```
 
 **Option B: Via GitHub Web UI**
-1. Go to https://github.com/baggiiiie/try-monorepo/releases/new
+1. Go to https://github.com/baggiiiie/configlock/releases/new
 2. Click "Choose a tag" and type: `configlock-v1.0.0`
 3. Click "Create new tag on publish"
 4. Set title: `ConfigLock v1.0.0`
@@ -44,11 +44,11 @@ GitHub Actions will automatically:
 
 After the workflow completes:
 
-1. Visit the [releases page](https://github.com/baggiiiie/try-monorepo/releases)
+1. Visit the [releases page](https://github.com/baggiiiie/configlock/releases)
 2. Verify all 4 binaries are attached
 3. Test the install script:
    ```bash
-   curl -sSL https://raw.githubusercontent.com/baggiiiie/try-monorepo/main/configlock/install.sh | bash
+   curl -sSL https://raw.githubusercontent.com/baggiiiie/configlock/main/configlock/install.sh | bash
    ```
 
 ## Manual Release (Alternative)
@@ -79,7 +79,7 @@ shasum -a 256 configlock-* > checksums.txt
 
 ### 2. Create GitHub Release Manually
 
-1. Go to https://github.com/baggiiiie/try-monorepo/releases/new
+1. Go to https://github.com/baggiiiie/configlock/releases/new
 2. Create a tag: `configlock-v1.0.0`
 3. Set title: `ConfigLock v1.0.0`
 4. Upload all files:
@@ -130,7 +130,7 @@ If you need to delete a bad release:
 gh release delete configlock-v1.0.0 --yes
 
 # Or delete manually from the web UI at:
-# https://github.com/baggiiiie/try-monorepo/releases
+# https://github.com/baggiiiie/configlock/releases
 
 # Also delete the tag
 git push --delete origin configlock-v1.0.0
@@ -143,7 +143,7 @@ Then create a new corrected release.
 
 ### GitHub Actions fails
 
-1. Check the [Actions tab](https://github.com/baggiiiie/try-monorepo/actions)
+1. Check the [Actions tab](https://github.com/baggiiiie/configlock/actions)
 2. Review the workflow logs
 3. Common issues:
    - Go version mismatch
@@ -156,7 +156,7 @@ Then create a new corrected release.
 2. Check that binary names match: `configlock-{os}-{arch}`
 3. Test the download URL manually:
    ```bash
-   curl -I https://github.com/baggiiiie/try-monorepo/releases/download/configlock-v1.0.0/configlock-linux-amd64
+   curl -I https://github.com/baggiiiie/configlock/releases/download/configlock-v1.0.0/configlock-linux-amd64
    ```
 
 ## Checklist
