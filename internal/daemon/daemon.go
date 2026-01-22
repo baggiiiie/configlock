@@ -116,7 +116,10 @@ func (d *Daemon) Start() error {
 			d.logger.Errorf("Watcher error: %v", err)
 
 		case <-ticker.C:
-			// Periodic enforcement
+			// Skip periodic enforcement outside work hours
+			if !d.cfg.IsWithinWorkHours() {
+				continue
+			}
 			d.enforce()
 		}
 	}
@@ -155,17 +158,10 @@ func (d *Daemon) setupWatchers() error {
 		d.watcher.Remove(path)
 	}
 
-	// Add watches for all locked paths and their parent directories
+	// Add watches for all locked paths
 	for _, path := range d.cfg.LockedPaths {
-		// Watch the path itself
 		if err := d.addWatch(path); err != nil {
 			d.logger.Warnf("Failed to watch %s: %v", path, err)
-		}
-
-		// Watch parent directory to detect if file is deleted/recreated
-		parent := filepath.Dir(path)
-		if err := d.addWatch(parent); err != nil {
-			d.logger.Warnf("Failed to watch parent %s: %v", parent, err)
 		}
 	}
 
@@ -206,13 +202,7 @@ func (d *Daemon) enforce() {
 		}
 	}
 
-	// Check if within lock hours
-	if !d.cfg.IsWithinWorkHours() {
-		d.logger.Info("Outside lock hours, skipping enforcement")
-		return
-	}
-
-	d.logger.Info("Enforcing locks (within lock hours)")
+	d.logger.Info("Enforcing locks")
 
 	// Apply locks to all paths and verify they're locked
 	for _, path := range d.cfg.LockedPaths {
@@ -250,11 +240,6 @@ func (d *Daemon) handleFileEvent(eventPath string) {
 		// Check if event path is the locked path itself or within it
 		if eventPath == lockedPath || strings.HasPrefix(eventPath, lockedPath+string(filepath.Separator)) {
 			d.logger.Infof("Event detected on locked path %s, re-applying lock", lockedPath)
-			d.sendManualChangeNotification(lockedPath)
-			d.lockPath(lockedPath)
-		} else if filepath.Dir(eventPath) == filepath.Dir(lockedPath) {
-			// Event in parent directory (e.g., file was deleted/recreated)
-			d.logger.Infof("Event detected in parent of locked path %s, re-applying lock", lockedPath)
 			d.sendManualChangeNotification(lockedPath)
 			d.lockPath(lockedPath)
 		}
