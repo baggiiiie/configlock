@@ -30,45 +30,28 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Lock Hours: %s - %s\n", cfg.StartTime, cfg.EndTime)
 
-	// Current state
-	now := time.Now()
-	weekday := now.Weekday()
 	withinWorkHours := cfg.IsWithinWorkHours()
-
-	fmt.Printf("Current Time: %s\n", now.Format("Monday, 02 Jan 2006 15:04:05"))
-
-	if withinWorkHours {
-		fmt.Println("Status: 🔒 LOCKED")
-	} else {
-		if weekday == time.Saturday || weekday == time.Sunday {
-			fmt.Println("Status: 🔓 UNLOCKED")
-		} else {
-			fmt.Println("Status: 🔓 UNLOCKED")
-		}
-	}
 
 	// Check daemon status
 	svc, err := service.New()
-	var daemonRunning bool
-	if err == nil {
-		status, err := svc.Status()
-		if err == nil && status == kardianos.StatusRunning {
-			daemonRunning = true
-			fmt.Println("Daemon: ✓ Running")
+	if err != nil {
+		fmt.Printf("Daemon: ⚠ Unable to check (%v)\n", err)
+	}
+	status, _ := svc.Status()
+	daemonRunning := status == kardianos.StatusRunning
+
+	if daemonRunning {
+		if withinWorkHours {
+			fmt.Println("Status: Locks enforced")
 		} else {
-			daemonRunning = false
-			fmt.Println("Daemon: ✗ Not running")
+			fmt.Println("Status: Daemon idle until lock hours")
 		}
 	} else {
-		fmt.Printf("Daemon: ⚠ Unable to check status (%v)\n", err)
-	}
-
-	// Show warning if there's a mismatch
-	if withinWorkHours && !daemonRunning {
-		fmt.Println("\n⚠️  WARNING: During lock hours but daemon not running!")
-		fmt.Println("    Locks will not be enforced. Run 'configlock start' to start the daemon.")
-	} else if !withinWorkHours && daemonRunning {
-		fmt.Println("\n✓ Daemon is running and will enforce locks during lock hours.")
+		if withinWorkHours {
+			fmt.Println("Status: Daemon not running! Run 'configlock start'")
+		} else {
+			fmt.Println("Status: Daemon not running")
+		}
 	}
 
 	fmt.Println()
@@ -76,27 +59,17 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	// Locked paths
 	fmt.Printf("Locked Paths: %d\n", len(cfg.LockedPaths))
 	if len(cfg.LockedPaths) > 0 {
-		fmt.Println("Use 'configlock list' to see all locked paths")
+		fmt.Println("- Use 'configlock list' to see all locked paths")
 	}
-	fmt.Println()
-
-	fmt.Printf("Temp Unlock Duration: %d minutes\n", cfg.TempDuration)
 	// Temporary exclusions
 	cfg.CleanExpiredExcludes()
 	if len(cfg.TempExcludes) > 0 {
 		fmt.Printf("Active Temporary Unlocks: %d\n", len(cfg.TempExcludes))
 		for path, expiryStr := range cfg.TempExcludes {
-			expiry, err := time.Parse(time.RFC3339, expiryStr)
-			if err != nil {
-				continue
-			}
-			remaining := time.Until(expiry)
-			if remaining > 0 {
-				fmt.Printf("  - %s (expires in %s)\n", path, formatDuration(remaining))
+			if expiry, err := time.Parse(time.RFC3339, expiryStr); err == nil {
+				fmt.Printf("  - %s (expires in %s)\n", path, formatDuration(time.Until(expiry)))
 			}
 		}
-	} else {
-		fmt.Println("Active Temporary Unlocks: None")
 	}
 
 	return nil
