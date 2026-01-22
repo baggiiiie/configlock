@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Architecture
 
 ConfigLock is a Go CLI tool and daemon that locks config files during work hours using system-level immutable flags.
@@ -18,28 +16,29 @@ ConfigLock is a Go CLI tool and daemon that locks config files during work hours
 - `internal/logger/` - Structured logging with rotation
 - `internal/fileutil/` - File utilities (recursive directory walking, backup creation)
 
-### Key Dependencies
-
-- `github.com/spf13/cobra` - CLI framework
-- `github.com/fsnotify/fsnotify` - File system event monitoring
-- `github.com/kardianos/service` - Cross-platform service management
-- `github.com/robfig/cron/v3` - Cron expression parsing for work hours
-
-### Platform-Specific Behavior
-
-- **Linux**: Uses `chattr +i -R` for immutable flags, systemd user service at `~/.config/systemd/user/configlock.service`, logs to `~/.local/share/configlock/configlock.log`
-- **macOS**: Uses `chflags schg -R` for immutable flags, launchd agent at `~/Library/LaunchAgents/com.configlock.daemon.plist`, logs to `~/Library/Logs/configlock.log`
-- Falls back to `chmod 0444` if immutable flags fail
-
 ### Daemon Architecture
 
-The daemon (`configlock daemon`, hidden command) runs two concurrent mechanisms:
-1. **File Event Handler**: fsnotify watcher on locked paths, immediately re-locks on any file event during work hours
-2. **Periodic Sweep**: Every 30 seconds, enforces locks on all paths and cleans expired temp excludes
+The daemon (`configlock daemon`, hidden command) is work-hours-aware and operates in two states:
+
+**Active (within work hours)**:
+
+- Sets up fsnotify watchers on locked paths only (not parent directories)
+- File events trigger immediate re-lock
+- Periodic sweep every 30 seconds enforces locks and cleans expired temp excludes
+- Only logs when actually applying a lock (skips if already locked)
+
+**Inactive (outside work hours)**:
+
+- No watchers, no enforcement
+- Sleeps until next work hours start (calculated via `TimeUntilWorkHours()`)
+- On transition out of work hours: reloads config, unlocks all paths, removes watchers
+
+**Config reloading**: Only on SIGHUP signal, not during periodic enforcement
 
 ### Config File Structure
 
 Located at `~/.config/configlock/config.json`:
+
 - `locked_paths`: Array of absolute paths to lock
 - `start_time`/`end_time`: Simple time range (HH:MM format)
 - `cron_schedule`: Alternative cron expression for complex schedules
