@@ -22,6 +22,7 @@ type Daemon struct {
 	logger   *logger.Logger
 	notifier *notifier.Notifier
 	stopCh   chan struct{}
+	active   bool // true when within work hours and watchers are set up
 }
 
 // New creates a new daemon instance
@@ -51,6 +52,8 @@ func New() (*Daemon, error) {
 //  1. File system watching (fsnotify) - provides instant reaction to changes
 //  2. Periodic sweep (every 30 seconds) - catches changes that fsnotify might miss,
 //     such as manual flag removal via 'sudo chattr -i' or 'sudo chflags noschg'
+//
+// Outside work hours, the daemon sleeps until work hours start.
 func (d *Daemon) Start() error {
 	d.logger.Info("Starting configlock daemon")
 
@@ -58,19 +61,9 @@ func (d *Daemon) Start() error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
-	// Set up file watchers for instant reaction to file system changes
-	if err := d.setupWatchers(); err != nil {
-		d.logger.Errorf("Failed to setup watchers: %v", err)
-		// Continue anyway, periodic enforcement will still work
-	}
-
-	// Start periodic enforcement (runs every 30 seconds)
-	// This catches attribute changes that fsnotify might not detect
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	// Initial enforcement
-	d.enforce()
+	// Create timer for next check
+	timer := time.NewTimer(0) // fires immediately for initial check
+	defer timer.Stop()
 
 	for {
 		select {
@@ -81,46 +74,60 @@ func (d *Daemon) Start() error {
 		case sig := <-sigCh:
 			d.logger.Infof("Received signal: %v", sig)
 			if sig == syscall.SIGHUP {
-				// Reload config
 				d.logger.Info("Reloading configuration")
 				cfg, err := config.Load()
 				if err != nil {
 					d.logger.Errorf("Failed to reload config: %v", err)
 				} else {
 					d.cfg = cfg
-					d.setupWatchers()
+					if d.active {
+						d.setupWatchers()
+					}
 				}
 			} else {
-				// SIGTERM or SIGINT - graceful shutdown with unlock
 				d.gracefulShutdown()
 				return nil
 			}
 
 		case event := <-d.watcher.Events:
-			// Ignore events on configlock's own config file to prevent log spam
+			if !d.active {
+				continue
+			}
+			// Ignore events on configlock's own config file
 			configDir := config.GetConfigDir()
 			configPath := config.GetConfigPath()
 			if event.Name != configPath && event.Name != configDir &&
 				!strings.HasPrefix(event.Name, configDir+string(filepath.Separator)) {
 				d.logger.Infof("File event detected: %s %s", event.Op, event.Name)
 			}
-
-			// Re-apply locks immediately on any file change detected by fsnotify
-			// This provides instant reaction to modifications, deletions, renames, etc.
-			if d.cfg.IsWithinWorkHours() {
-				// Find which locked path this event relates to and re-lock it
-				d.handleFileEvent(event.Name)
-			}
+			d.handleFileEvent(event.Name)
 
 		case err := <-d.watcher.Errors:
 			d.logger.Errorf("Watcher error: %v", err)
 
-		case <-ticker.C:
-			// Skip periodic enforcement outside work hours
-			if !d.cfg.IsWithinWorkHours() {
-				continue
+		case <-timer.C:
+			withinWorkHours := d.cfg.IsWithinWorkHours()
+
+			if withinWorkHours && !d.active {
+				// Transition: entering work hours
+				d.activate()
+				timer.Reset(30 * time.Second)
+			} else if !withinWorkHours && d.active {
+				// Transition: leaving work hours
+				d.deactivate()
+				sleepDuration := d.cfg.TimeUntilWorkHours()
+				d.logger.Infof("Sleeping until work hours start (%s)", sleepDuration.Round(time.Minute))
+				timer.Reset(sleepDuration)
+			} else if d.active {
+				// Already active, enforce and check again in 30s
+				d.enforce()
+				timer.Reset(30 * time.Second)
+			} else {
+				// Still inactive, sleep until work hours
+				sleepDuration := d.cfg.TimeUntilWorkHours()
+				d.logger.Infof("Outside work hours, sleeping until start (%s)", sleepDuration.Round(time.Minute))
+				timer.Reset(sleepDuration)
 			}
-			d.enforce()
 		}
 	}
 }
@@ -149,6 +156,36 @@ func (d *Daemon) Stop() {
 		d.watcher.Close()
 	}
 	d.logger.Close()
+}
+
+// activate sets up watchers and enforces locks when entering work hours
+func (d *Daemon) activate() {
+	d.logger.Info("Entering work hours, activating")
+	d.active = true
+	if err := d.setupWatchers(); err != nil {
+		d.logger.Errorf("Failed to setup watchers: %v", err)
+	}
+	d.enforce()
+}
+
+// deactivate removes watchers and unlocks paths when leaving work hours
+func (d *Daemon) deactivate() {
+	d.logger.Info("Leaving work hours, deactivating")
+	d.active = false
+	d.clearWatchers()
+	// Unlock all paths
+	for _, path := range d.cfg.LockedPaths {
+		if err := locker.Unlock(path); err != nil {
+			d.logger.Errorf("Failed to unlock %s: %v", path, err)
+		}
+	}
+}
+
+// clearWatchers removes all file system watchers
+func (d *Daemon) clearWatchers() {
+	for _, path := range d.watcher.WatchList() {
+		d.watcher.Remove(path)
+	}
 }
 
 // setupWatchers sets up file system watchers for all locked paths

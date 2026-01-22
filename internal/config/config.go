@@ -250,6 +250,55 @@ func (c *Config) isWithinCronSchedule(now time.Time) bool {
 	return !nextTrigger.After(currentMinute)
 }
 
+// TimeUntilWorkHours returns the duration until work hours start
+// Returns 0 if already within work hours
+func (c *Config) TimeUntilWorkHours() time.Duration {
+	now := time.Now()
+
+	if c.IsWithinWorkHours() {
+		return 0
+	}
+
+	// If cron schedule is defined, use it
+	if c.CronSchedule != "" {
+		return c.timeUntilCronSchedule(now)
+	}
+
+	// Parse start time
+	startTime, err := time.Parse("15:04", c.StartTime)
+	if err != nil {
+		return time.Hour // fallback to 1 hour
+	}
+
+	// Build next start time today
+	nextStart := time.Date(now.Year(), now.Month(), now.Day(),
+		startTime.Hour(), startTime.Minute(), 0, 0, now.Location())
+
+	// If we're past today's start time or it's a weekend, find next weekday
+	if now.After(nextStart) || now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+		// Move to next day
+		nextStart = nextStart.Add(24 * time.Hour)
+		// Skip weekends
+		for nextStart.Weekday() == time.Saturday || nextStart.Weekday() == time.Sunday {
+			nextStart = nextStart.Add(24 * time.Hour)
+		}
+	}
+
+	return nextStart.Sub(now)
+}
+
+// timeUntilCronSchedule returns duration until the next cron trigger
+func (c *Config) timeUntilCronSchedule(now time.Time) time.Duration {
+	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	schedule, err := parser.Parse(c.CronSchedule)
+	if err != nil {
+		return time.Hour // fallback to 1 hour
+	}
+
+	nextTrigger := schedule.Next(now)
+	return nextTrigger.Sub(now)
+}
+
 // ValidateCronSchedule validates a cron schedule expression
 func ValidateCronSchedule(cronExpr string) error {
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
