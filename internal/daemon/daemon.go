@@ -75,14 +75,9 @@ func (d *Daemon) Start() error {
 			d.logger.Infof("Received signal: %v", sig)
 			if sig == syscall.SIGHUP {
 				d.logger.Info("Reloading configuration")
-				cfg, err := config.Load()
-				if err != nil {
-					d.logger.Errorf("Failed to reload config: %v", err)
-				} else {
-					d.cfg = cfg
-					if d.active {
-						d.setupWatchers()
-					}
+				d.reloadConfig()
+				if d.active {
+					d.setupWatchers()
 				}
 			} else {
 				d.gracefulShutdown()
@@ -134,17 +129,8 @@ func (d *Daemon) Start() error {
 
 // gracefulShutdown unlocks all configured paths and stops the daemon
 func (d *Daemon) gracefulShutdown() {
-	d.logger.Info("Graceful shutdown initiated - unlocking all paths")
-
-	// Unlock all configured paths
-	for _, path := range d.cfg.LockedPaths {
-		d.logger.Infof("Unlocking path: %s", path)
-		if err := locker.Unlock(path); err != nil {
-			d.logger.Errorf("Failed to unlock %s: %v", path, err)
-		}
-	}
-
-	d.logger.Info("All paths unlocked, stopping daemon")
+	d.logger.Info("Graceful shutdown initiated")
+	d.unlockAll()
 	d.Stop()
 }
 
@@ -173,12 +159,27 @@ func (d *Daemon) deactivate() {
 	d.logger.Info("Leaving work hours, deactivating")
 	d.active = false
 	d.clearWatchers()
-	// Unlock all paths
+	d.reloadConfig()
+	d.unlockAll()
+}
+
+// unlockAll unlocks all configured paths
+func (d *Daemon) unlockAll() {
 	for _, path := range d.cfg.LockedPaths {
 		if err := locker.Unlock(path); err != nil {
 			d.logger.Errorf("Failed to unlock %s: %v", path, err)
 		}
 	}
+}
+
+// reloadConfig reloads configuration from disk
+func (d *Daemon) reloadConfig() {
+	cfg, err := config.Load()
+	if err != nil {
+		d.logger.Errorf("Failed to reload config: %v", err)
+		return
+	}
+	d.cfg = cfg
 }
 
 // clearWatchers removes all file system watchers
@@ -224,14 +225,6 @@ func (d *Daemon) addWatch(path string) error {
 
 // enforce applies locks to all configured paths if within lock hours
 func (d *Daemon) enforce() {
-	// Reload config to get latest changes
-	cfg, err := config.Load()
-	if err != nil {
-		d.logger.Errorf("Failed to reload config during enforcement: %v", err)
-		return
-	}
-	d.cfg = cfg
-
 	// Clean expired temporary exclusions and save only if something was cleaned
 	if d.cfg.CleanExpiredExcludes() {
 		if err := d.cfg.Save(); err != nil {
@@ -241,18 +234,11 @@ func (d *Daemon) enforce() {
 
 	d.logger.Info("Enforcing locks")
 
-	// Apply locks to all paths and verify they're locked
 	for _, path := range d.cfg.LockedPaths {
 		if d.cfg.IsTemporarilyExcluded(path) {
 			d.logger.Infof("Skipping temporarily excluded path: %s", path)
 			continue
 		}
-
-		// Verify if lock is still in place
-		if locked, err := locker.IsLocked(path); err == nil && !locked {
-			d.logger.Warnf("Lock removed from %s, re-applying", path)
-		}
-
 		d.lockPath(path)
 	}
 }
@@ -294,23 +280,24 @@ func (d *Daemon) sendManualChangeNotification(path string) {
 	}
 }
 
-// lockPath applies a lock to a specific path
+// lockPath applies a lock to a specific path if not already locked
 func (d *Daemon) lockPath(path string) {
-	// Check if path exists
 	if _, err := os.Stat(path); err != nil {
 		d.logger.Warnf("Path no longer exists: %s", path)
 		return
 	}
 
-	// Skip if temporarily excluded
 	if d.cfg.IsTemporarilyExcluded(path) {
 		return
 	}
 
-	// Apply lock
+	// Skip if already locked
+	if locked, err := locker.IsLocked(path); err == nil && locked {
+		return
+	}
+
+	d.logger.Infof("Locking: %s", path)
 	if err := locker.Lock(path); err != nil {
 		d.logger.Errorf("Failed to lock %s: %v", path, err)
-	} else {
-		d.logger.Infof("Locked: %s", path)
 	}
 }
