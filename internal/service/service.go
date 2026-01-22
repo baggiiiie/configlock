@@ -44,7 +44,7 @@ func New() (*Service, error) {
 			// Install as user service (not system-wide)
 			"UserService": true,
 			// Auto-restart on crash/exit
-			"Restart": "always",
+			"Restart":    "always",
 			"RestartSec": "5",
 		},
 	}

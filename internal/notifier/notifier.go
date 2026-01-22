@@ -62,14 +62,14 @@ func (n *Notifier) notifyLinux(title, message string) error {
 		"--dest=org.freedesktop.Notifications",
 		"--object-path=/org/freedesktop/Notifications",
 		"--method=org.freedesktop.Notifications.Notify",
-		"configlock",           // app_name
-		"0",                     // replaces_id (0 = new notification)
-		"dialog-warning",        // app_icon
-		title,                   // summary
-		message,                 // body
-		"[]",                    // actions
-		"{}",                    // hints
-		"5000")                  // expire_timeout (5 seconds)
+		"configlock",     // app_name
+		"0",              // replaces_id (0 = new notification)
+		"dialog-warning", // app_icon
+		title,            // summary
+		message,          // body
+		"[]",             // actions
+		"{}",             // hints
+		"5000")           // expire_timeout (5 seconds)
 
 	if err := cmd.Run(); err == nil {
 		return nil

@@ -17,11 +17,11 @@ import (
 )
 
 type Daemon struct {
-	cfg       *config.Config
-	watcher   *fsnotify.Watcher
-	logger    *logger.Logger
-	notifier  *notifier.Notifier
-	stopCh    chan struct{}
+	cfg      *config.Config
+	watcher  *fsnotify.Watcher
+	logger   *logger.Logger
+	notifier *notifier.Notifier
+	stopCh   chan struct{}
 }
 
 // New creates a new daemon instance
@@ -37,11 +37,11 @@ func New() (*Daemon, error) {
 	}
 
 	return &Daemon{
-		cfg:       cfg,
-		watcher:   watcher,
-		logger:    logger.GetLogger(),
-		notifier:  notifier.New("ConfigLock"),
-		stopCh:    make(chan struct{}),
+		cfg:      cfg,
+		watcher:  watcher,
+		logger:   logger.GetLogger(),
+		notifier: notifier.New("ConfigLock"),
+		stopCh:   make(chan struct{}),
 	}, nil
 }
 
@@ -265,7 +265,7 @@ func (d *Daemon) handleFileEvent(eventPath string) {
 func (d *Daemon) sendManualChangeNotification(path string) {
 	title := "ConfigLock Alert"
 	message := fmt.Sprintf("Detected manual change to locked file: %s\nConfigLock will re-apply the lock.", filepath.Base(path))
-	
+
 	if err := d.notifier.Notify(title, message); err != nil {
 		d.logger.Warnf("Failed to send notification: %v", err)
 		// Don't fail the entire operation if notification fails
