@@ -19,7 +19,7 @@ A CLI tool and daemon that prevents editing of specified config files or directo
 Install ConfigLock with a single command:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/baggiiiie/configlock/main/configlock/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/baggiiiie/configlock/main/install.sh | bash
 ```
 
 This will automatically:
