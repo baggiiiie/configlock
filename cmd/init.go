@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/baggiiiie/configlock/internal/challenge"
 	"github.com/baggiiiie/configlock/internal/config"
 	"github.com/baggiiiie/configlock/internal/locker"
 	"github.com/baggiiiie/configlock/internal/service"
@@ -36,14 +37,40 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Check if config already exists
 	configPath := config.GetConfigPath()
+	var existingLockedPaths []string
 	if _, err := os.Stat(configPath); err == nil {
-		fmt.Print("Config file already exists. Overwrite? (y/N): ")
-		reader := bufio.NewReader(os.Stdin)
-		response, _ := reader.ReadString('\n')
-		response = strings.TrimSpace(strings.ToLower(response))
-		if response != "y" && response != "yes" {
-			fmt.Println("Initialization cancelled.")
-			return nil
+		// Config exists - check if it's locked
+		isLocked, err := locker.IsLocked(configPath)
+		if err != nil {
+			fmt.Printf("Warning: failed to check if config is locked: %v\n", err)
+		}
+
+		if isLocked {
+			// Config is locked - require typing challenge to prevent bypass
+			fmt.Println("\n⚠️  Config file is currently locked.")
+			fmt.Println("Re-initializing will modify the configuration.")
+			fmt.Println("You must complete the typing challenge to proceed.\n")
+
+			if err := challenge.Run(); err != nil {
+				return fmt.Errorf("typing challenge failed: %w", err)
+			}
+		} else {
+			// Config exists but not locked - just ask for confirmation
+			fmt.Print("Config file already exists. Overwrite? (y/N): ")
+			reader := bufio.NewReader(os.Stdin)
+			response, _ := reader.ReadString('\n')
+			response = strings.TrimSpace(strings.ToLower(response))
+			if response != "y" && response != "yes" {
+				fmt.Println("Initialization cancelled.")
+				return nil
+			}
+		}
+
+		// Load existing config to preserve locked paths
+		existingCfg, err := config.Load()
+		if err == nil {
+			existingLockedPaths = existingCfg.LockedPaths
+			fmt.Printf("Preserving %d existing locked path(s)\n", len(existingLockedPaths))
 		}
 	}
 
@@ -114,6 +141,17 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Add config file itself to locked paths
 	cfg.AddPath(configPath)
+
+	// Restore existing locked paths (if re-initializing)
+	if len(existingLockedPaths) > 0 {
+		fmt.Println("Restoring existing locked paths...")
+		for _, path := range existingLockedPaths {
+			// Skip the config path since we already added it
+			if path != configPath {
+				cfg.AddPath(path)
+			}
+		}
+	}
 
 	// Save config
 	if err := cfg.Save(); err != nil {
