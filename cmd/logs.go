@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -49,7 +50,7 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	defer file.Close()
 
 	// Seek to the end of the file
-	if _, err := file.Seek(0, os.SEEK_END); err != nil {
+	if _, err := file.Seek(0, io.SeekEnd); err != nil {
 		return fmt.Errorf("failed to seek to end of file: %w", err)
 	}
 

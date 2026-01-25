@@ -54,13 +54,13 @@ func (l *Logger) Init() error {
 	case "linux":
 		// Use XDG_DATA_HOME or default to ~/.local/share
 		logDir := filepath.Join(home, ".local", "share", "configlock")
-		if err := os.MkdirAll(logDir, 0755); err != nil {
+		if err := os.MkdirAll(logDir, 0o755); err != nil {
 			return fmt.Errorf("failed to create log directory: %w", err)
 		}
 		logPath = filepath.Join(logDir, "configlock.log")
 	case "darwin":
 		logDir := filepath.Join(home, "Library", "Logs")
-		if err := os.MkdirAll(logDir, 0755); err != nil {
+		if err := os.MkdirAll(logDir, 0o755); err != nil {
 			return fmt.Errorf("failed to create log directory: %w", err)
 		}
 		logPath = filepath.Join(logDir, "configlock.log")
@@ -71,7 +71,7 @@ func (l *Logger) Init() error {
 	l.logPath = logPath
 
 	// Open or create log file
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
@@ -133,7 +133,7 @@ func (l *Logger) rotate() {
 	os.Rename(l.logPath, backupPath)
 
 	// Open new log file
-	file, err := os.OpenFile(l.logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := os.OpenFile(l.logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		l.disabled = true
 		return
@@ -159,17 +159,17 @@ func (l *Logger) Error(message string) {
 }
 
 // Infof logs a formatted info message
-func (l *Logger) Infof(format string, args ...interface{}) {
+func (l *Logger) Infof(format string, args ...any) {
 	l.Info(fmt.Sprintf(format, args...))
 }
 
 // Warnf logs a formatted warning message
-func (l *Logger) Warnf(format string, args ...interface{}) {
+func (l *Logger) Warnf(format string, args ...any) {
 	l.Warn(fmt.Sprintf(format, args...))
 }
 
 // Errorf logs a formatted error message
-func (l *Logger) Errorf(format string, args ...interface{}) {
+func (l *Logger) Errorf(format string, args ...any) {
 	l.Error(fmt.Sprintf(format, args...))
 }
 
