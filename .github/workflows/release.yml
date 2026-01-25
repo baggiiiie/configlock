@@ -49,3 +49,18 @@ jobs:
           files: configlock-${{ matrix.os }}-${{ matrix.arch }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Tap
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger tap update
+        run: |
+          gh workflow run update-formula.yml \
+            -f version=${{ github.event.release.tag_name }} \
+            -f formula=configlock \
+            -f repo=baggiiiie/configlock \
+            -R baggiiiie/homebrew-tap
+        env:
+          GITHUB_TOKEN: ${{ secrets.TAP_UPDATE_TOKEN }}
