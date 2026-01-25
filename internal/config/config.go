@@ -11,15 +11,14 @@ import (
 	"time"
 
 	"github.com/baggiiiie/configlock/internal/locker"
-	"github.com/robfig/cron/v3"
 )
 
 // Config represents the configlock configuration
 type Config struct {
 	LockedPaths  []string          `json:"locked_paths"`
-	StartTime    string            `json:"start_time"`    // "08:00" (used if CronSchedule is empty)
-	EndTime      string            `json:"end_time"`      // "17:00" (used if CronSchedule is empty)
-	CronSchedule string            `json:"cron_schedule"` // Optional: cron expression for lock hours (e.g., "0 8-17 * * 1-5" for 8am-5pm weekdays)
+	StartTime    string            `json:"start_time"`    // "08:00"
+	EndTime      string            `json:"end_time"`      // "17:00"
+	LockDays     []int             `json:"lock_days"`     // e.g., [1, 2, 3, 4, 5] for weekdays
 	TempDuration int               `json:"temp_duration"` // minutes
 	TempExcludes map[string]string `json:"temp_excludes"` // path -> expiration ISO8601
 	mu           sync.RWMutex      `json:"-"`
@@ -192,19 +191,21 @@ func (c *Config) IsTemporarilyExcluded(path string) bool {
 }
 
 // IsWithinWorkHours checks if the current time is within lock hours
-// If CronSchedule is defined, it uses that; otherwise uses StartTime/EndTime
 func (c *Config) IsWithinWorkHours() bool {
 	now := time.Now()
-
-	// If cron schedule is defined, use it
-	if c.CronSchedule != "" {
-		return c.isWithinCronSchedule(now)
+	weekday := int(now.Weekday())
+	if weekday == 0 { // Sunday
+		weekday = 7
 	}
 
-	// Otherwise, use simple start/end time logic
-	// Check if weekday (Monday = 1, Sunday = 0)
-	weekday := now.Weekday()
-	if weekday == time.Saturday || weekday == time.Sunday {
+	isLockDay := false
+	for _, day := range c.LockDays {
+		if day == weekday {
+			isLockDay = true
+			break
+		}
+	}
+	if !isLockDay {
 		return false
 	}
 
@@ -227,29 +228,6 @@ func (c *Config) IsWithinWorkHours() bool {
 	return (currentTime.Equal(start) || currentTime.After(start)) && currentTime.Before(end)
 }
 
-// isWithinCronSchedule checks if the current time matches the cron schedule
-// For lock hours, we interpret the cron schedule as defining when locks should be active
-// The schedule should match if the cron would trigger at the current hour
-func (c *Config) isWithinCronSchedule(now time.Time) bool {
-	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	schedule, err := parser.Parse(c.CronSchedule)
-	if err != nil {
-		// If parsing fails, log error and return false
-		return false
-	}
-
-	// Round current time to the start of the current minute
-	currentMinute := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), 0, 0, now.Location())
-
-	// Check if the schedule would trigger at the current minute
-	// We look for the next scheduled time from one minute ago
-	oneMinuteAgo := currentMinute.Add(-1 * time.Minute)
-	nextTrigger := schedule.Next(oneMinuteAgo)
-
-	// If the next trigger is at or before the current minute, we're within lock hours
-	return !nextTrigger.After(currentMinute)
-}
-
 // TimeUntilWorkHours returns the duration until work hours start
 // Returns 0 if already within work hours
 func (c *Config) TimeUntilWorkHours() time.Duration {
@@ -257,11 +235,6 @@ func (c *Config) TimeUntilWorkHours() time.Duration {
 
 	if c.IsWithinWorkHours() {
 		return 0
-	}
-
-	// If cron schedule is defined, use it
-	if c.CronSchedule != "" {
-		return c.timeUntilCronSchedule(now)
 	}
 
 	// Parse start time
@@ -274,119 +247,155 @@ func (c *Config) TimeUntilWorkHours() time.Duration {
 	nextStart := time.Date(now.Year(), now.Month(), now.Day(),
 		startTime.Hour(), startTime.Minute(), 0, 0, now.Location())
 
-	// If we're past today's start time or it's a weekend, find next weekday
-	if now.After(nextStart) || now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+	for i := 0; i < 8; i++ {
+		weekday := int(nextStart.Weekday())
+		if weekday == 0 { // Sunday
+			weekday = 7
+		}
+
+		isLockDay := false
+		for _, day := range c.LockDays {
+			if day == weekday {
+				isLockDay = true
+				break
+			}
+		}
+
+		if isLockDay && now.Before(nextStart) {
+			return nextStart.Sub(now)
+		}
+
 		// Move to next day
 		nextStart = nextStart.Add(24 * time.Hour)
-		// Skip weekends
-		for nextStart.Weekday() == time.Saturday || nextStart.Weekday() == time.Sunday {
-			nextStart = nextStart.Add(24 * time.Hour)
-		}
 	}
 
-	return nextStart.Sub(now)
-}
-
-// timeUntilCronSchedule returns duration until the next cron trigger
-func (c *Config) timeUntilCronSchedule(now time.Time) time.Duration {
-	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	schedule, err := parser.Parse(c.CronSchedule)
-	if err != nil {
-		return time.Hour // fallback to 1 hour
-	}
-
-	nextTrigger := schedule.Next(now)
-	return nextTrigger.Sub(now)
-}
-
-// ValidateCronSchedule validates a cron schedule expression
-func ValidateCronSchedule(cronExpr string) error {
-	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	_, err := parser.Parse(cronExpr)
-	if err != nil {
-		return fmt.Errorf("invalid cron expression: %w", err)
-	}
-	return nil
+	return time.Hour // fallback
 }
 
 // CreateDefault creates a new config with default values
-func CreateDefault(startTime, endTime string, tempDuration int) *Config {
+func CreateDefault(startTime, endTime string, lockDays []int, tempDuration int) *Config {
 	return &Config{
 		LockedPaths:  []string{},
 		StartTime:    startTime,
 		EndTime:      endTime,
-		CronSchedule: "", // Empty by default, uses StartTime/EndTime
+		LockDays:     lockDays,
 		TempDuration: tempDuration,
 		TempExcludes: make(map[string]string),
 	}
 }
 
-// CreateWithCron creates a new config with cron schedule
-func CreateWithCron(cronSchedule string, tempDuration int) *Config {
-	return &Config{
-		LockedPaths:  []string{},
-		StartTime:    "",
-		EndTime:      "",
-		CronSchedule: cronSchedule,
-		TempDuration: tempDuration,
-		TempExcludes: make(map[string]string),
+// NormalizeTimeRange parses a time range string and returns start and end times
+func NormalizeTimeRange(input string) (string, string, error) {
+	parts := strings.Split(input, "-")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid time range format: %s (expected HHMM-HHMM or H-H)", input)
 	}
+
+	startTime, err := normalizeTime(parts[0])
+	if err != nil {
+		return "", "", err
+	}
+	endTime, err := normalizeTime(parts[1])
+	if err != nil {
+		return "", "", err
+	}
+	return startTime, endTime, nil
 }
 
-// NormalizeTimeInput normalizes time input to "HH:MM" format
-// Accepts formats: "HH:MM", "HHMM", "H:MM", "HMM"
-// Examples: "08:00", "0800", "8:00", "800" all become "08:00"
-func NormalizeTimeInput(input string) (string, error) {
+func normalizeTime(input string) (string, error) {
 	input = strings.TrimSpace(input)
 
-	// If it already has a colon, validate and return
 	if strings.Contains(input, ":") {
-		parts := strings.Split(input, ":")
-		if len(parts) != 2 {
-			return "", fmt.Errorf("invalid time format: %s (expected HH:MM or HHMM)", input)
-		}
-		// Validate the format
 		_, err := time.Parse("15:04", input)
 		if err != nil {
-			return "", fmt.Errorf("invalid time format: %s (expected HH:MM or HHMM)", input)
+			return "", fmt.Errorf("invalid time format: %s", input)
 		}
 		return input, nil
 	}
 
-	// Handle formats without colon: HHMM or HMM
-	// Remove any non-digit characters
 	re := regexp.MustCompile(`\D`)
 	digits := re.ReplaceAllString(input, "")
 
 	var hour, minute string
 	switch len(digits) {
-	case 3:
-		// HMM format (e.g., "830" -> "08:30")
-		hour = "0" + digits[0:1]
-		minute = digits[1:3]
-	case 4:
-		// HHMM format (e.g., "0830" -> "08:30")
-		hour = digits[0:2]
-		minute = digits[2:4]
-	case 2:
-		// HH format (e.g., "08" -> "08:00")
-		hour = digits[0:2]
+	case 1: // H
+		hour = "0" + digits
 		minute = "00"
-	case 1:
-		// H format (e.g., "8" -> "08:00")
-		hour = "0" + digits[0:1]
+	case 2: // HH
+		hour = digits
 		minute = "00"
+	case 3: // HMM
+		hour = "0" + digits[:1]
+		minute = digits[1:]
+	case 4: // HHMM
+		hour = digits[:2]
+		minute = digits[2:]
 	default:
-		return "", fmt.Errorf("invalid time format: %s (expected HH:MM or HHMM)", input)
+		return "", fmt.Errorf("invalid time format: %s", input)
 	}
 
 	normalized := fmt.Sprintf("%s:%s", hour, minute)
-
-	// Validate the result
 	_, err := time.Parse("15:04", normalized)
 	if err != nil {
-		return "", fmt.Errorf("invalid time: %s (hours must be 00-23, minutes must be 00-59)", input)
+		return "", fmt.Errorf("invalid time: %s", input)
 	}
-
 	return normalized, nil
 }
+
+// ParseDays parses a day range string (e.g., "1-5" or "1,2,5") into a slice of integers
+func ParseDays(input string) ([]int, error) {
+	var days []int
+	parts := strings.Split(input, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if strings.Contains(part, "-") {
+			rangeParts := strings.Split(part, "-")
+			if len(rangeParts) != 2 {
+				return nil, fmt.Errorf("invalid day range: %s", part)
+			}
+			start, err := strconv.Atoi(rangeParts[0])
+			if err != nil {
+				return nil, fmt.Errorf("invalid day: %s", rangeParts[0])
+			}
+			end, err := strconv.Atoi(rangeParts[1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid day: %s", rangeParts[1])
+			}
+			if start < 1 || end > 7 || start > end {
+				return nil, fmt.Errorf("invalid day range: %d-%d", start, end)
+			}
+			for i := start; i <= end; i++ {
+				days = append(days, i)
+			}
+		} else {
+			day, err := strconv.Atoi(part)
+			if err != nil {
+				return nil, fmt.Errorf("invalid day: %s", part)
+			}
+			if day < 1 || day > 7 {
+				return nil, fmt.Errorf("invalid day: %d (must be 1-7)", day)
+			}
+			days = append(days, day)
+		}
+	}
+	// Deduplicate
+	daySet := make(map[int]struct{})
+	var uniqueDays []int
+	for _, day := range days {
+		if _, exists := daySet[day]; !exists {
+			daySet[day] = struct{}{}
+			uniqueDays = append(uniqueDays, day)
+		}
+	}
+	return uniqueDays, nil
+}
+
+// FormatDays formats a slice of days into a string
+func FormatDays(days []int) string {
+	var parts []string
+	for _, day := range days {
+		parts = append(parts, strconv.Itoa(day))
+	}
+	return strings.Join(parts, ",")
+}
+

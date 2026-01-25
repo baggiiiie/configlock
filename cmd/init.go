@@ -50,101 +50,67 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Prompt for lock hours configuration
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Println("\nlock hours configuration:")
-	fmt.Println("  - Simple time range: Enter start time (e.g., 0800 or 08:00)")
-	fmt.Println("  - Cron schedule: Use 'cron:' prefix (e.g., cron:0 8-17 * * 1-5)")
+	fmt.Println("\nLock hours configuration:")
+	fmt.Println("  - Time range: Enter a time range like 0800-1700 or 8-17.")
+	fmt.Println("  - Day range: Enter a day range like 1-5 (Mon-Fri) or comma-separated days like 1,2,3,4,5.")
 
 	var cfg *config.Config
 	var startTime, endTime string
+	var lockDays []int
 
-	// Get start time or cron schedule with retry
+	// Get time range with retry
 	for {
-		fmt.Print("\nlock hours start time or cron schedule (default 08:00): ")
+		fmt.Print("\nEnter lock time range (default 08:00-17:00): ")
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
 
 		if input == "" {
-			input = "08:00"
+			input = "08:00-17:00"
 		}
 
-		// Check if it's a cron expression
-		if strings.HasPrefix(input, "cron:") {
-			cronSchedule := strings.TrimPrefix(input, "cron:")
-			cronSchedule = strings.TrimSpace(cronSchedule)
-
-			if cronSchedule == "" {
-				fmt.Println("Error: cron schedule cannot be empty. Please try again.")
-				continue
-			}
-
-			// Validate cron schedule
-			if err := config.ValidateCronSchedule(cronSchedule); err != nil {
-				fmt.Printf("Error: %v. Please try again.\n", err)
-				continue
-			}
-
-			// Get temp duration before creating config
-			fmt.Print("\nTemporary unlock duration in minutes (default 5): ")
-			durationStr, _ := reader.ReadString('\n')
-			durationStr = strings.TrimSpace(durationStr)
-			tempDuration := 5
-			if durationStr != "" {
-				duration, err := strconv.Atoi(durationStr)
-				if err != nil {
-					return fmt.Errorf("invalid duration: %w", err)
-				}
-				tempDuration = duration
-			}
-
-			cfg = config.CreateWithCron(cronSchedule, tempDuration)
-			fmt.Printf("✓ Using cron schedule: %s\n", cronSchedule)
-			break
-		}
-
-		// Try to parse as time
-		normalized, err := config.NormalizeTimeInput(input)
+		var err error
+		startTime, endTime, err = config.NormalizeTimeRange(input)
 		if err != nil {
 			fmt.Printf("Error: %v. Please try again.\n", err)
 			continue
 		}
-		startTime = normalized
-
-		// Get end time with retry
-		for {
-			fmt.Print("lock hours end time (default 17:00): ")
-			endInput, _ := reader.ReadString('\n')
-			endInput = strings.TrimSpace(endInput)
-
-			if endInput == "" {
-				endInput = "17:00"
-			}
-
-			normalized, err := config.NormalizeTimeInput(endInput)
-			if err != nil {
-				fmt.Printf("Error: %v. Please try again.\n", err)
-				continue
-			}
-			endTime = normalized
-			break
-		}
-
-		// Get temp duration
-		fmt.Print("\nTemporary unlock duration in minutes (default 5): ")
-		durationStr, _ := reader.ReadString('\n')
-		durationStr = strings.TrimSpace(durationStr)
-		tempDuration := 5
-		if durationStr != "" {
-			duration, err := strconv.Atoi(durationStr)
-			if err != nil {
-				return fmt.Errorf("invalid duration: %w", err)
-			}
-			tempDuration = duration
-		}
-
-		cfg = config.CreateDefault(startTime, endTime, tempDuration)
-		fmt.Printf("✓ Using time range: %s - %s (weekdays only)\n", startTime, endTime)
 		break
 	}
+
+	// Get day range with retry
+	for {
+		fmt.Print("Enter lock days (default 1-5): ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(input)
+
+		if input == "" {
+			input = "1-5"
+		}
+
+		var err error
+		lockDays, err = config.ParseDays(input)
+		if err != nil {
+			fmt.Printf("Error: %v. Please try again.\n", err)
+			continue
+		}
+		break
+	}
+
+	// Get temp duration
+	fmt.Print("\nTemporary unlock duration in minutes (default 5): ")
+	durationStr, _ := reader.ReadString('\n')
+	durationStr = strings.TrimSpace(durationStr)
+	tempDuration := 5
+	if durationStr != "" {
+		duration, err := strconv.Atoi(durationStr)
+		if err != nil {
+			return fmt.Errorf("invalid duration: %w", err)
+		}
+		tempDuration = duration
+	}
+
+	cfg = config.CreateDefault(startTime, endTime, lockDays, tempDuration)
+	fmt.Printf("✓ Using time range: %s - %s on days: %s\n", startTime, endTime, config.FormatDays(lockDays))
 
 	// Add config file itself to locked paths
 	cfg.AddPath(configPath)
@@ -189,11 +155,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("✓ Daemon started successfully")
 	fmt.Println("\nConfigLock is now active!")
-	if cfg.CronSchedule != "" {
-		fmt.Printf("lock hours: %s (cron schedule)\n", cfg.CronSchedule)
-	} else {
-		fmt.Printf("lock hours: %s - %s (weekdays only)\n", startTime, endTime)
-	}
+	fmt.Printf("Lock hours: %s - %s on days: %s\n", startTime, endTime, config.FormatDays(lockDays))
 	fmt.Println("Use 'configlock add <path>' to add files/directories to lock.")
 
 	return nil

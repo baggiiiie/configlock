@@ -18,8 +18,7 @@ var editTimeCmd = &cobra.Command{
 	Short: "Edit lock hours configuration",
 	Long: `Edit the lock hours configuration for ConfigLock.
 
-This allows you to change between simple time range mode and cron schedule mode,
-or update the existing time settings. If the daemon is running, it will be
+This allows you to change the existing time settings. If the daemon is running, it will be
 automatically restarted to apply the changes immediately.`,
 	RunE: runEditTime,
 }
@@ -37,14 +36,9 @@ func runEditTime(cmd *cobra.Command, args []string) error {
 
 	// Show current configuration
 	fmt.Println("Current lock hours configuration:")
-	if cfg.CronSchedule != "" {
-		fmt.Printf("  Mode: Cron schedule\n")
-		fmt.Printf("  Schedule: %s\n", cfg.CronSchedule)
-	} else {
-		fmt.Printf("  Mode: Simple time range\n")
-		fmt.Printf("  Start time: %s\n", cfg.StartTime)
-		fmt.Printf("  End time: %s\n", cfg.EndTime)
-	}
+	fmt.Printf("  Mode: Simple time range\n")
+	fmt.Printf("  Start time: %s\n", cfg.StartTime)
+	fmt.Printf("  End time: %s\n", cfg.EndTime)
 	fmt.Println()
 
 	// Prompt for new configuration
@@ -52,44 +46,18 @@ func runEditTime(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("\nNew lock hours configuration:")
 	fmt.Println("  - Simple time range: Enter start time (e.g., 0800 or 08:00)")
-	fmt.Println("  - Cron schedule: Use 'cron:' prefix (e.g., cron:0 8-17 * * 1-5)")
 
 	var startTime, endTime string
 
-	// Get start time or cron schedule with retry
+	// Get start time with retry
 	for {
-		fmt.Print("\nlock hours start time or cron schedule (press Enter to keep current): ")
+		fmt.Print("\nlock hours start time (press Enter to keep current): ")
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSpace(input)
 
 		// If empty, keep current configuration
 		if input == "" {
 			fmt.Println("✓ Keeping current lock hours configuration")
-			break
-		}
-
-		// Check if it's a cron expression
-		if strings.HasPrefix(input, "cron:") {
-			cronSchedule := strings.TrimPrefix(input, "cron:")
-			cronSchedule = strings.TrimSpace(cronSchedule)
-
-			if cronSchedule == "" {
-				fmt.Println("Error: cron schedule cannot be empty. Please try again.")
-				continue
-			}
-
-			// Validate cron schedule
-			if err := config.ValidateCronSchedule(cronSchedule); err != nil {
-				fmt.Printf("Error: %v. Please try again.\n", err)
-				continue
-			}
-
-			// Update config
-			cfg.CronSchedule = cronSchedule
-			cfg.StartTime = ""
-			cfg.EndTime = ""
-
-			fmt.Printf("✓ Updated to cron schedule: %s\n", cronSchedule)
 			break
 		}
 
@@ -124,7 +92,6 @@ func runEditTime(cmd *cobra.Command, args []string) error {
 		// Update config
 		cfg.StartTime = startTime
 		cfg.EndTime = endTime
-		cfg.CronSchedule = ""
 
 		fmt.Printf("✓ Updated to simple time range: %s - %s (weekdays only)\n", startTime, endTime)
 		break

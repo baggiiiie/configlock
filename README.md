@@ -5,7 +5,7 @@ A CLI tool that locks config files during work hours using system-level immutabl
 ## Features
 
 - Uses system-level immutable flags
-- Configurable work hours with simple time ranges or cron expressions
+- Configurable work hours with simple time ranges
 - File system watcher detects and re-locks files immediately if modified
 - Typing challenge for unlock operations to prevent impulsive actions
 - Temporary unlocks with configurable durations
@@ -39,7 +39,6 @@ This creates the config directory, prompts for work hours and temp unlock durati
 Time input formats:
 
 - Simple: `HH:MM` or `HHMM` (e.g., `14:30` or `1430`)
-- Cron: `cron:MIN HOUR DAY MONTH WEEKDAY` (e.g., `cron:0 8-17 * * 1-5`)
 
 ### Commands
 
@@ -55,7 +54,7 @@ configlock list
 configlock status
 
 # Edit work hours
-configlock edit
+configlock edit time
 
 # Temporarily unlock a path (requires typing challenge)
 configlock temp-unlock ~/.zshrc
@@ -78,7 +77,6 @@ Config file: `~/.config/configlock/config.json`
   "locked_paths": ["/home/user/.zshrc"],
   "start_time": "08:00",
   "end_time": "17:00",
-  "cron_schedule": "",
   "temp_duration": 5,
   "temp_excludes": {}
 }

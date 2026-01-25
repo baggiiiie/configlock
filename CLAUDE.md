@@ -41,6 +41,5 @@ Located at `~/.config/configlock/config.json`:
 
 - `locked_paths`: Array of absolute paths to lock
 - `start_time`/`end_time`: Simple time range (HH:MM format)
-- `cron_schedule`: Alternative cron expression for complex schedules
 - `temp_duration`: Default minutes for temporary unlocks
 - `temp_excludes`: Map of path to expiration timestamp
