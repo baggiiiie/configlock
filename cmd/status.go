@@ -28,7 +28,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	fmt.Printf("Lock Hours: %s - %s\n", cfg.StartTime, cfg.EndTime)
+	fmt.Printf("Lock Hours: %s - %s (Days: %s)\n", cfg.StartTime, cfg.EndTime, config.FormatDays(cfg.LockDays))
 
 	withinWorkHours := cfg.IsWithinWorkHours()
 

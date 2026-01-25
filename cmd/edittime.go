@@ -36,65 +36,48 @@ func runEditTime(cmd *cobra.Command, args []string) error {
 
 	// Show current configuration
 	fmt.Println("Current lock hours configuration:")
-	fmt.Printf("  Mode: Simple time range\n")
-	fmt.Printf("  Start time: %s\n", cfg.StartTime)
-	fmt.Printf("  End time: %s\n", cfg.EndTime)
+	fmt.Printf("  Time range: %s - %s\n", cfg.StartTime, cfg.EndTime)
+	fmt.Printf("  Lock days: %s\n", config.FormatDays(cfg.LockDays))
 	fmt.Println()
 
 	// Prompt for new configuration
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("\nNew lock hours configuration:")
-	fmt.Println("  - Simple time range: Enter start time (e.g., 0800 or 08:00)")
+	fmt.Println("  - Time range: Enter a time range like 0800-1700 or 8-17.")
+	fmt.Println("  - Day range: Enter a day range like 1-5 (Mon-Fri) or comma-separated days like 1,2,3,4,5.")
 
-	var startTime, endTime string
+	// Get time range with retry
+	fmt.Print("\nEnter lock time range (press Enter to keep current): ")
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
 
-	// Get start time with retry
-	for {
-		fmt.Print("\nlock hours start time (press Enter to keep current): ")
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-
-		// If empty, keep current configuration
-		if input == "" {
-			fmt.Println("✓ Keeping current lock hours configuration")
-			break
-		}
-
-		// Try to parse as time
-		normalized, err := config.NormalizeTimeInput(input)
+	if input != "" {
+		startTime, endTime, err := config.NormalizeTimeRange(input)
 		if err != nil {
-			fmt.Printf("Error: %v. Please try again.\n", err)
-			continue
+			return fmt.Errorf("invalid time range: %w", err)
 		}
-		startTime = normalized
-
-		// Get end time with retry
-		for {
-			fmt.Print("lock hours end time: ")
-			endInput, _ := reader.ReadString('\n')
-			endInput = strings.TrimSpace(endInput)
-
-			if endInput == "" {
-				fmt.Println("Error: end time cannot be empty. Please try again.")
-				continue
-			}
-
-			normalized, err := config.NormalizeTimeInput(endInput)
-			if err != nil {
-				fmt.Printf("Error: %v. Please try again.\n", err)
-				continue
-			}
-			endTime = normalized
-			break
-		}
-
-		// Update config
 		cfg.StartTime = startTime
 		cfg.EndTime = endTime
+		fmt.Printf("✓ Updated time range to: %s - %s\n", startTime, endTime)
+	} else {
+		fmt.Println("✓ Keeping current time range.")
+	}
 
-		fmt.Printf("✓ Updated to simple time range: %s - %s (weekdays only)\n", startTime, endTime)
-		break
+	// Get day range with retry
+	fmt.Print("Enter lock days (press Enter to keep current): ")
+	input, _ = reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	if input != "" {
+		lockDays, err := config.ParseDays(input)
+		if err != nil {
+			return fmt.Errorf("invalid day range: %w", err)
+		}
+		cfg.LockDays = lockDays
+		fmt.Printf("✓ Updated lock days to: %s\n", config.FormatDays(lockDays))
+	} else {
+		fmt.Println("✓ Keeping current lock days.")
 	}
 
 	// Prompt for temp duration update

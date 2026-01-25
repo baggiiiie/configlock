@@ -6,6 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,8 +27,10 @@ type Config struct {
 	mu           sync.RWMutex      `json:"-"`
 }
 
-var configPath string
-var configDir string
+var (
+	configPath string
+	configDir  string
+)
 
 func init() {
 	home, err := os.UserHomeDir()
@@ -90,7 +95,7 @@ func (c *Config) Save() error {
 
 	// Write atomically using a temp file
 	tmpPath := configPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write temp config: %w", err)
 	}
 
@@ -114,10 +119,8 @@ func (c *Config) AddPath(path string) {
 	defer c.mu.Unlock()
 
 	// Check if already exists
-	for _, p := range c.LockedPaths {
-		if p == path {
-			return
-		}
+	if slices.Contains(c.LockedPaths, path) {
+		return
 	}
 
 	c.LockedPaths = append(c.LockedPaths, path)
@@ -198,13 +201,7 @@ func (c *Config) IsWithinWorkHours() bool {
 		weekday = 7
 	}
 
-	isLockDay := false
-	for _, day := range c.LockDays {
-		if day == weekday {
-			isLockDay = true
-			break
-		}
-	}
+	isLockDay := slices.Contains(c.LockDays, weekday)
 	if !isLockDay {
 		return false
 	}
@@ -247,19 +244,13 @@ func (c *Config) TimeUntilWorkHours() time.Duration {
 	nextStart := time.Date(now.Year(), now.Month(), now.Day(),
 		startTime.Hour(), startTime.Minute(), 0, 0, now.Location())
 
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		weekday := int(nextStart.Weekday())
 		if weekday == 0 { // Sunday
 			weekday = 7
 		}
 
-		isLockDay := false
-		for _, day := range c.LockDays {
-			if day == weekday {
-				isLockDay = true
-				break
-			}
-		}
+		isLockDay := slices.Contains(c.LockDays, weekday)
 
 		if isLockDay && now.Before(nextStart) {
 			return nextStart.Sub(now)
@@ -345,8 +336,8 @@ func normalizeTime(input string) (string, error) {
 // ParseDays parses a day range string (e.g., "1-5" or "1,2,5") into a slice of integers
 func ParseDays(input string) ([]int, error) {
 	var days []int
-	parts := strings.Split(input, ",")
-	for _, part := range parts {
+	parts := strings.SplitSeq(input, ",")
+	for part := range parts {
 		part = strings.TrimSpace(part)
 		if strings.Contains(part, "-") {
 			rangeParts := strings.Split(part, "-")
@@ -390,12 +381,25 @@ func ParseDays(input string) ([]int, error) {
 	return uniqueDays, nil
 }
 
-// FormatDays formats a slice of days into a string
+// FormatDays formats a slice of days into a human-readable string
 func FormatDays(days []int) string {
-	var parts []string
-	for _, day := range days {
-		parts = append(parts, strconv.Itoa(day))
+	dayMap := map[int]string{
+		1: "Mon",
+		2: "Tue",
+		3: "Wed",
+		4: "Thu",
+		5: "Fri",
+		6: "Sat",
+		7: "Sun",
 	}
-	return strings.Join(parts, ",")
-}
 
+	var parts []string
+	// Sort days for consistent output
+	sort.Ints(days)
+	for _, day := range days {
+		if name, ok := dayMap[day]; ok {
+			parts = append(parts, name)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
