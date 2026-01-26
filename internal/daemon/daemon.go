@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -23,6 +24,31 @@ type Daemon struct {
 	notifier *notifier.Notifier
 	stopCh   chan struct{}
 	active   bool // true when within work hours and watchers are set up
+}
+
+// getStateFilePath returns the path to the daemon state file
+// This file is used to detect abnormal termination (e.g., kill -9)
+func getStateFilePath() string {
+	return filepath.Join(config.GetConfigDir(), ".daemon_running")
+}
+
+// writeStateFile creates a state file indicating the daemon is running
+func writeStateFile() error {
+	stateFile := getStateFilePath()
+	// Write PID to state file for debugging purposes
+	return os.WriteFile(stateFile, []byte(strconv.Itoa(os.Getpid())), 0o600)
+}
+
+// removeStateFile removes the daemon state file (called on graceful shutdown)
+func removeStateFile() {
+	os.Remove(getStateFilePath())
+}
+
+// checkAbnormalTermination checks if the previous daemon instance was killed abnormally
+// Returns true if state file exists from a previous run
+func checkAbnormalTermination() bool {
+	_, err := os.Stat(getStateFilePath())
+	return err == nil
 }
 
 // New creates a new daemon instance
@@ -55,6 +81,17 @@ func New() (*Daemon, error) {
 //
 // Outside work hours, the daemon sleeps until work hours start.
 func (d *Daemon) Start() error {
+	// Check if previous daemon was killed abnormally (e.g., kill -9)
+	if checkAbnormalTermination() {
+		d.logger.Warn("Previous daemon instance was terminated abnormally (possibly killed with SIGKILL)")
+		d.sendKillNotification()
+	}
+
+	// Write state file to track this daemon instance
+	if err := writeStateFile(); err != nil {
+		d.logger.Warnf("Failed to write daemon state file: %v", err)
+	}
+
 	d.logger.Info("Starting configlock daemon")
 
 	// Set up signal handling
@@ -130,6 +167,7 @@ func (d *Daemon) Start() error {
 // gracefulShutdown unlocks all configured paths and stops the daemon
 func (d *Daemon) gracefulShutdown() {
 	d.logger.Info("Graceful shutdown initiated")
+	removeStateFile() // Remove state file to indicate clean shutdown
 	d.unlockAll()
 	d.Stop()
 }
@@ -277,6 +315,16 @@ func (d *Daemon) sendManualChangeNotification(path string) {
 	if err := d.notifier.Notify(title, message); err != nil {
 		d.logger.Warnf("Failed to send notification: %v", err)
 		// Don't fail the entire operation if notification fails
+	}
+}
+
+// sendKillNotification sends a system notification when daemon was killed abnormally
+func (d *Daemon) sendKillNotification() {
+	title := "ConfigLock Alert"
+	message := "ConfigLock daemon was killed and has been restarted.\nYour config files are now protected again."
+
+	if err := d.notifier.Notify(title, message); err != nil {
+		d.logger.Warnf("Failed to send kill notification: %v", err)
 	}
 }
 
