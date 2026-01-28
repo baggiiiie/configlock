@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime/debug"
 
+	"github.com/baggiiiie/configlock/internal/upgrade"
 	"github.com/spf13/cobra"
 )
 
@@ -17,6 +18,13 @@ var rootCmd = &cobra.Command{
 config files or directories during lock hours using system-level immutable flags.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		// Skip upgrade check for daemon (runs in background) and help/version
+		if cmd.Name() == "daemon" || cmd.Name() == "help" {
+			return
+		}
+		upgrade.CheckForUpgrade(GetVersion())
+	},
 }
 
 // SetVersion sets the version from main package

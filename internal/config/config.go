@@ -24,7 +24,12 @@ type Config struct {
 	LockDays     []int             `json:"lock_days"`     // e.g., [1, 2, 3, 4, 5] for weekdays
 	TempDuration int               `json:"temp_duration"` // minutes
 	TempExcludes map[string]string `json:"temp_excludes"` // path -> expiration ISO8601
-	mu           sync.RWMutex      `json:"-"`
+
+	// Upgrade check cache
+	UpgradeLastCheck     string `json:"upgrade_last_check,omitempty"`     // ISO8601 timestamp
+	UpgradeLatestVersion string `json:"upgrade_latest_version,omitempty"` // cached latest version
+
+	mu sync.RWMutex `json:"-"`
 }
 
 var (
