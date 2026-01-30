@@ -23,7 +23,7 @@ type Config struct {
 ## Main Loop
 
 1. Load config (with file mutex to avoid race with CLI).
-1. Set up fsnotify watcher for all locked paths and their parent directories.
+1. Set up fsnotify watcher for all locked paths.
 1. Run two concurrent mechanisms:
 
 - File Event Handler (instant reaction):

@@ -16,6 +16,15 @@ AND I AM WILLING TO PROCEED.`
 
 const maxRetriesPerLine = 3
 
+// Require runs the typing challenge and wraps any error with the given context.
+// Use this as a standardized way to require a challenge before dangerous operations.
+func Require(context string) error {
+	if err := Run(); err != nil {
+		return fmt.Errorf("%s: %w", context, err)
+	}
+	return nil
+}
+
 // Run executes the typing challenge
 func Run() error {
 	lines := strings.Split(statement, "\n")

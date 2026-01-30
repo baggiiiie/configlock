@@ -62,8 +62,8 @@ func runTempUnlock(cmd *cobra.Command, args []string) error {
 	}
 
 	// Run typing challenge
-	if err := challenge.Run(); err != nil {
-		return fmt.Errorf("challenge failed: %w", err)
+	if err := challenge.Require("challenge failed"); err != nil {
+		return err
 	}
 
 	// Add temporary exclusion for the path

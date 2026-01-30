@@ -51,8 +51,8 @@ func runRm(cmd *cobra.Command, args []string) error {
 
 	// Run typing challenge only during lock hours
 	if cfg.IsWithinWorkHours() {
-		if err := challenge.Run(); err != nil {
-			return fmt.Errorf("challenge failed: %w", err)
+		if err := challenge.Require("challenge failed"); err != nil {
+			return err
 		}
 	}
 

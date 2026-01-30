@@ -22,7 +22,7 @@ The daemon (`configlock daemon`, hidden command) is work-hours-aware and operate
 
 **Active (within work hours)**:
 
-- Sets up fsnotify watchers on locked paths only (not parent directories)
+- Sets up fsnotify watchers on locked paths
 - File events trigger immediate re-lock
 - Periodic sweep every 30 seconds enforces locks and cleans expired temp excludes
 - Only logs when actually applying a lock (skips if already locked)

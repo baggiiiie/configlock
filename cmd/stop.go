@@ -64,8 +64,8 @@ func runStop(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Run typing challenge
-	if err := challenge.Run(); err != nil {
-		return fmt.Errorf("challenge failed: %w", err)
+	if err := challenge.Require("challenge failed"); err != nil {
+		return err
 	}
 
 	fmt.Println()

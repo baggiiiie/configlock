@@ -49,10 +49,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 			// Config is locked - require typing challenge to prevent bypass
 			fmt.Println("\n⚠️  Config file is currently locked.")
 			fmt.Println("Re-initializing will modify the configuration.")
-			fmt.Println("You must complete the typing challenge to proceed.\n")
+			fmt.Println("You must complete the typing challenge to proceed.")
+			fmt.Println()
 
-			if err := challenge.Run(); err != nil {
-				return fmt.Errorf("typing challenge failed: %w", err)
+			if err := challenge.Require("typing challenge failed"); err != nil {
+				return err
 			}
 		} else {
 			// Config exists but not locked - just ask for confirmation
